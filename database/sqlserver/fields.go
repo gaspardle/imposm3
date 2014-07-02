@@ -64,10 +64,10 @@ func (t *validatedGeometryType) GeneralizeSql(colSpec *ColumnSpec, spec *General
 	)
 }
 
-var pgTypes map[string]ColumnType
+var mssqlTypes map[string]ColumnType
 
 func init() {
-	pgTypes = map[string]ColumnType{
+	mssqlTypes = map[string]ColumnType{
 		"string":             &simpleColumnType{"NVARCHAR(255)"},
 		"bool":               &simpleColumnType{"BIT"},
 		"int8":               &simpleColumnType{"SMALLINT"},

@@ -16,7 +16,7 @@ type TableTx interface {
 }
 
 type bulkTableTx struct {
-	Pg         *PostGIS
+	Pg         *Mssql
 	Tx         *sql.Tx
 	Table      string
 	Spec       *TableSpec
@@ -26,9 +26,9 @@ type bulkTableTx struct {
 	rows       chan []interface{}
 }
 
-func NewBulkTableTx(pg *PostGIS, spec *TableSpec) TableTx {
+func NewBulkTableTx(mssql *Mssql, spec *TableSpec) TableTx {
 	tt := &bulkTableTx{
-		Pg:    pg,
+		Pg:    mssql,
 		Table: spec.FullName,
 		Spec:  spec,
 		wg:    &sync.WaitGroup{},
@@ -112,7 +112,7 @@ func (tt *bulkTableTx) Rollback() {
 }
 
 type syncTableTx struct {
-	Pg         *PostGIS
+	Pg         *Mssql
 	Tx         *sql.Tx
 	Table      string
 	Spec       tableSpec
@@ -127,9 +127,9 @@ type tableSpec interface {
 	DeleteSQL() string
 }
 
-func NewSynchronousTableTx(pg *PostGIS, tableName string, spec tableSpec) TableTx {
+func NewSynchronousTableTx(mssql *Mssql, tableName string, spec tableSpec) TableTx {
 	tt := &syncTableTx{
-		Pg:    pg,
+		Pg:    mssql,
 		Table: tableName,
 		Spec:  spec,
 	}

@@ -119,7 +119,7 @@ func populateGeometryColumn(tx *sql.Tx, tableName string, spec TableSpec) error 
 	return nil
 }
 
-func (pg *PostGIS) createSchema(schema string) error {
+func (mssql *Mssql) createSchema(schema string) error {
 	var sql string
 	var err error
 
@@ -132,7 +132,7 @@ func (pg *PostGIS) createSchema(schema string) error {
 		"THEN 1  ELSE 0  END AS BIT)",
 		schema)
 
-	row := pg.Db.QueryRow(sql)
+	row := mssql.Db.QueryRow(sql)
 	var exists bool
 	err = row.Scan(&exists)
 	if err != nil {
@@ -143,7 +143,7 @@ func (pg *PostGIS) createSchema(schema string) error {
 	}
 
 	sql = fmt.Sprintf("CREATE SCHEMA %s", schema)
-	_, err = pg.Db.Exec(sql)
+	_, err = mssql.Db.Exec(sql)
 	if err != nil {
 		return &SQLError{sql, err}
 	}
@@ -151,19 +151,19 @@ func (pg *PostGIS) createSchema(schema string) error {
 }
 
 // Init creates schema and tables, drops existing data.
-func (pg *PostGIS) Init() error {
+func (mssql *Mssql) Init() error {
 
-	if err := pg.createSchema(pg.Config.ImportSchema); err != nil {
+	if err := mssql.createSchema(mssql.Config.ImportSchema); err != nil {
 		fmt.Printf("on err\n\n")
 		return err
 	}
 
-	tx, err := pg.Db.Begin()
+	tx, err := mssql.Db.Begin()
 	if err != nil {
 		return err
 	}
 	defer rollbackIfTx(&tx)
-	for _, spec := range pg.Tables {
+	for _, spec := range mssql.Tables {
 		if err := createTable(tx, *spec); err != nil {
 			return err
 		}
@@ -177,7 +177,7 @@ func (pg *PostGIS) Init() error {
 }
 
 // Finish creates spatial indices on all tables.
-func (pg *PostGIS) Finish() error {
+func (mssql *Mssql) Finish() error {
 	defer log.StopStep(log.StartStep(fmt.Sprintf("Creating geometry indices")))
 
 	worker := int(runtime.NumCPU() / 2)
@@ -185,20 +185,20 @@ func (pg *PostGIS) Finish() error {
 		worker = 1
 	}
 
-	p := newWorkerPool(worker, len(pg.Tables)+len(pg.GeneralizedTables))
-	for _, tbl := range pg.Tables {
+	p := newWorkerPool(worker, len(mssql.Tables)+len(mssql.GeneralizedTables))
+	for _, tbl := range mssql.Tables {
 		tableName := tbl.FullName
 		table := tbl
 		p.in <- func() error {
-			return createIndex(pg, tableName, table.Columns)
+			return createIndex(mssql, tableName, table.Columns)
 		}
 	}
 
-	for _, tbl := range pg.GeneralizedTables {
+	for _, tbl := range mssql.GeneralizedTables {
 		tableName := tbl.FullName
 		table := tbl
 		p.in <- func() error {
-			return createIndex(pg, tableName, table.Source.Columns)
+			return createIndex(mssql, tableName, table.Source.Columns)
 		}
 	}
 
@@ -210,11 +210,11 @@ func (pg *PostGIS) Finish() error {
 	return nil
 }
 
-func createIndex(pg *PostGIS, tableName string, columns []ColumnSpec) error {
+func createIndex(mssql *Mssql, tableName string, columns []ColumnSpec) error {
 	sql := fmt.Sprintf(`ALTER TABLE [%s].[%s]  ADD CONSTRAINT "PK_%s_id" PRIMARY KEY CLUSTERED (id) ON [PRIMARY]`,
-		pg.Config.ImportSchema, tableName, tableName)
+		mssql.Config.ImportSchema, tableName, tableName)
 	step := log.StartStep(fmt.Sprintf("Creating Primary key id index on %s", tableName))
-	_, err := pg.Db.Exec(sql)
+	_, err := mssql.Db.Exec(sql)
 	log.StopStep(step)
 	if err != nil {
 		log.StopStep(sql)
@@ -224,9 +224,9 @@ func createIndex(pg *PostGIS, tableName string, columns []ColumnSpec) error {
 	for _, col := range columns {
 		if col.FieldType.Name == "id" {
 			sql := fmt.Sprintf(`CREATE INDEX "%s_osm_id_idx" ON [%s].[%s](%s) ON [PRIMARY]`,
-				tableName, pg.Config.ImportSchema, tableName, col.Name)
+				tableName, mssql.Config.ImportSchema, tableName, col.Name)
 			step := log.StartStep(fmt.Sprintf("Creating OSM id index on %s", tableName))
-			_, err := pg.Db.Exec(sql)
+			_, err := mssql.Db.Exec(sql)
 			log.StopStep(step)
 			if err != nil {
 				log.StopStep(sql)
@@ -236,9 +236,9 @@ func createIndex(pg *PostGIS, tableName string, columns []ColumnSpec) error {
 		if col.Type.Name() == "GEOMETRY" {
 			sql := fmt.Sprintf(`CREATE SPATIAL INDEX %s_geom ON %s.%s(%s) USING GEOMETRY_AUTO_GRID
 			WITH( BOUNDING_BOX  = ( xmin  = -20037508.34, ymin  = -20037508.34, xmax  = 20037508.34, ymax  = 20037508.34), CELLS_PER_OBJECT  = 16, STATISTICS_NORECOMPUTE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON)`,
-				tableName, pg.Config.ImportSchema, tableName, col.Name)
+				tableName, mssql.Config.ImportSchema, tableName, col.Name)
 			step := log.StartStep(fmt.Sprintf("Creating geometry index on %s", tableName))
-			_, err := pg.Db.Exec(sql)
+			_, err := mssql.Db.Exec(sql)
 			log.StopStep(step)
 			if err != nil {
 				log.StopStep(sql)
@@ -250,19 +250,19 @@ func createIndex(pg *PostGIS, tableName string, columns []ColumnSpec) error {
 	return nil
 }
 
-func (pg *PostGIS) GeneralizeUpdates() error {
+func (mssql *Mssql) GeneralizeUpdates() error {
 	defer log.StopStep(log.StartStep(fmt.Sprintf("Updating generalized tables")))
-	for _, table := range pg.sortedGeneralizedTables() {
-		if ids, ok := pg.updatedIds[table]; ok {
+	for _, table := range mssql.sortedGeneralizedTables() {
+		if ids, ok := mssql.updatedIds[table]; ok {
 			for _, id := range ids {
-				pg.txRouter.Insert(table, []interface{}{id})
+				mssql.txRouter.Insert(table, []interface{}{id})
 			}
 		}
 	}
 	return nil
 }
 
-func (pg *PostGIS) Generalize() error {
+func (mssql *Mssql) Generalize() error {
 	defer log.StopStep(log.StartStep(fmt.Sprintf("Creating generalized tables")))
 
 	worker := int(runtime.NumCPU() / 2)
@@ -271,12 +271,12 @@ func (pg *PostGIS) Generalize() error {
 	}
 	// generalized tables can depend on other generalized tables
 	// create tables with non-generalized sources first
-	p := newWorkerPool(worker, len(pg.GeneralizedTables))
-	for _, table := range pg.GeneralizedTables {
+	p := newWorkerPool(worker, len(mssql.GeneralizedTables))
+	for _, table := range mssql.GeneralizedTables {
 		if table.SourceGeneralized == nil {
 			tbl := table // for following closure
 			p.in <- func() error {
-				if err := pg.generalizeTable(tbl); err != nil {
+				if err := mssql.generalizeTable(tbl); err != nil {
 					return err
 				}
 				tbl.created = true
@@ -295,12 +295,12 @@ func (pg *PostGIS) Generalize() error {
 	for created == 1 {
 		created = 0
 
-		p := newWorkerPool(worker, len(pg.GeneralizedTables))
-		for _, table := range pg.GeneralizedTables {
+		p := newWorkerPool(worker, len(mssql.GeneralizedTables))
+		for _, table := range mssql.GeneralizedTables {
 			if !table.created && table.SourceGeneralized.created {
 				tbl := table // for following closure
 				p.in <- func() error {
-					if err := pg.generalizeTable(tbl); err != nil {
+					if err := mssql.generalizeTable(tbl); err != nil {
 						return err
 					}
 					tbl.created = true
@@ -317,11 +317,11 @@ func (pg *PostGIS) Generalize() error {
 	return nil
 }
 
-func (pg *PostGIS) generalizeTable(table *GeneralizedTableSpec) error {
+func (mssql *Mssql) generalizeTable(table *GeneralizedTableSpec) error {
 	defer log.StopStep(log.StartStep(fmt.Sprintf("Generalizing %s into %s",
 		table.Source.FullName, table.FullName)))
 
-	tx, err := pg.Db.Begin()
+	tx, err := mssql.Db.Begin()
 	if err != nil {
 		return err
 	}
@@ -337,7 +337,7 @@ func (pg *PostGIS) generalizeTable(table *GeneralizedTableSpec) error {
 		cols = append(cols, col.Type.GeneralizeSql(&col, table))
 	}
 
-	if err := dropTableIfExists(tx, pg.Config.ImportSchema, table.FullName); err != nil {
+	if err := dropTableIfExists(tx, mssql.Config.ImportSchema, table.FullName); err != nil {
 		return err
 	}
 
@@ -351,7 +351,7 @@ func (pg *PostGIS) generalizeTable(table *GeneralizedTableSpec) error {
 	}
 
 	sql := fmt.Sprintf(`SELECT id, %s INTO [%s].[%s] FROM [%s].[%s] %s`,
-		columnSQL, pg.Config.ImportSchema, table.FullName, pg.Config.ImportSchema,
+		columnSQL, mssql.Config.ImportSchema, table.FullName, mssql.Config.ImportSchema,
 		sourceTable, where)
 
 	_, err = tx.Exec(sql)
@@ -373,7 +373,7 @@ func (pg *PostGIS) generalizeTable(table *GeneralizedTableSpec) error {
 }
 
 // Optimize clusters tables on new GeoHash index.
-func (pg *PostGIS) Optimize() error {
+func (mssql *Mssql) Optimize() error {
 	defer log.StopStep(log.StartStep(fmt.Sprintf("Clustering on geometry")))
 
 	worker := int(runtime.NumCPU() / 2)
@@ -381,20 +381,20 @@ func (pg *PostGIS) Optimize() error {
 		worker = 1
 	}
 
-	p := newWorkerPool(worker, len(pg.Tables)+len(pg.GeneralizedTables))
+	p := newWorkerPool(worker, len(mssql.Tables)+len(mssql.GeneralizedTables))
 
-	for _, tbl := range pg.Tables {
+	for _, tbl := range mssql.Tables {
 		tableName := tbl.FullName
 		table := tbl
 		p.in <- func() error {
-			return clusterTable(pg, tableName, table.Srid, table.Columns)
+			return clusterTable(mssql, tableName, table.Srid, table.Columns)
 		}
 	}
-	for _, tbl := range pg.GeneralizedTables {
+	for _, tbl := range mssql.GeneralizedTables {
 		tableName := tbl.FullName
 		table := tbl
 		p.in <- func() error {
-			return clusterTable(pg, tableName, table.Source.Srid, table.Source.Columns)
+			return clusterTable(mssql, tableName, table.Source.Srid, table.Source.Columns)
 		}
 	}
 
@@ -406,13 +406,13 @@ func (pg *PostGIS) Optimize() error {
 	return nil
 }
 
-func clusterTable(pg *PostGIS, tableName string, srid int, columns []ColumnSpec) error {
+func clusterTable(mssql *Mssql, tableName string, srid int, columns []ColumnSpec) error {
 	for _, col := range columns {
 		if col.Type.Name() == "GEOMETRY" {
 			step := log.StartStep(fmt.Sprintf("Indexing %s on geohash", tableName))
 			sql := fmt.Sprintf(`CREATE INDEX "%s_geom_geohash" ON "%s"."%s" (ST_GeoHash(ST_Transform(ST_SetSRID(Box2D(%s), %d), 4326)))`,
-				tableName, pg.Config.ImportSchema, tableName, col.Name, srid)
-			_, err := pg.Db.Exec(sql)
+				tableName, mssql.Config.ImportSchema, tableName, col.Name, srid)
+			_, err := mssql.Db.Exec(sql)
 			log.StopStep(step)
 			if err != nil {
 				return err
@@ -420,8 +420,8 @@ func clusterTable(pg *PostGIS, tableName string, srid int, columns []ColumnSpec)
 
 			step = log.StartStep(fmt.Sprintf("Clustering %s on geohash", tableName))
 			sql = fmt.Sprintf(`CLUSTER "%s_geom_geohash" ON "%s"."%s"`,
-				tableName, pg.Config.ImportSchema, tableName)
-			_, err = pg.Db.Exec(sql)
+				tableName, mssql.Config.ImportSchema, tableName)
+			_, err = mssql.Db.Exec(sql)
 			log.StopStep(step)
 			if err != nil {
 				return err
@@ -432,8 +432,8 @@ func clusterTable(pg *PostGIS, tableName string, srid int, columns []ColumnSpec)
 
 	step := log.StartStep(fmt.Sprintf("Analysing %s", tableName))
 	sql := fmt.Sprintf(`ANALYSE "%s"."%s"`,
-		pg.Config.ImportSchema, tableName)
-	_, err := pg.Db.Exec(sql)
+		mssql.Config.ImportSchema, tableName)
+	_, err := mssql.Db.Exec(sql)
 	log.StopStep(step)
 	if err != nil {
 		return err
@@ -442,7 +442,7 @@ func clusterTable(pg *PostGIS, tableName string, srid int, columns []ColumnSpec)
 	return nil
 }
 
-type PostGIS struct {
+type Mssql struct {
 	Db *sql.DB
 	//Params                  string
 	Config                  database.Config
@@ -454,89 +454,89 @@ type PostGIS struct {
 	updatedIds              map[string][]int64
 }
 
-func (pg *PostGIS) Open() error {
+func (mssql *Mssql) Open() error {
 	var err error
 
-	pg.Db, err = sql.Open("mssql", pg.Config.ConnectionParams)
+	mssql.Db, err = sql.Open("mssql", mssql.Config.ConnectionParams)
 	if err != nil {
 		return err
 	}
 	// check that the connection actually works
-	err = pg.Db.Ping()
+	err = mssql.Db.Ping()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (pg *PostGIS) InsertPoint(elem element.OSMElem, matches []mapping.Match) error {
+func (mssql *Mssql) InsertPoint(elem element.OSMElem, matches []mapping.Match) error {
 		for _, match := range matches {
 			row := match.Row(&elem)
-			if err := pg.txRouter.Insert(match.Table.Name, row); err != nil {
+			if err := mssql.txRouter.Insert(match.Table.Name, row); err != nil {
 				return err
 			}
 		}
 	return nil
 }
 
-func (pg *PostGIS) InsertLineString(elem element.OSMElem, matches []mapping.Match) error {
+func (mssql *Mssql) InsertLineString(elem element.OSMElem, matches []mapping.Match) error {
 		for _, match := range matches {
 			row := match.Row(&elem)
-			if err := pg.txRouter.Insert(match.Table.Name, row); err != nil {
+			if err := mssql.txRouter.Insert(match.Table.Name, row); err != nil {
 				return err
 			}
 		}
-		if pg.updateGeneralizedTables {
-			for _, generalizedTable := range pg.generalizedFromMatches(matches) {
-				pg.updatedIds[generalizedTable.Name] = append(pg.updatedIds[generalizedTable.Name], elem.Id)
+		if mssql.updateGeneralizedTables {
+			for _, generalizedTable := range mssql.generalizedFromMatches(matches) {
+				mssql.updatedIds[generalizedTable.Name] = append(mssql.updatedIds[generalizedTable.Name], elem.Id)
 			}
 		}
 	return nil
 }
 
-func (pg *PostGIS) InsertPolygon(elem element.OSMElem, matches []mapping.Match) error {
+func (mssql *Mssql) InsertPolygon(elem element.OSMElem, matches []mapping.Match) error {
 		for _, match := range matches {
 			row := match.Row(&elem)
-			if err := pg.txRouter.Insert(match.Table.Name, row); err != nil {
+			if err := mssql.txRouter.Insert(match.Table.Name, row); err != nil {
 				return err
 			}
 		}
-		if pg.updateGeneralizedTables {
-			for _, generalizedTable := range pg.generalizedFromMatches(matches) {
-				pg.updatedIds[generalizedTable.Name] = append(pg.updatedIds[generalizedTable.Name], elem.Id)
+		if mssql.updateGeneralizedTables {
+			for _, generalizedTable := range mssql.generalizedFromMatches(matches) {
+				mssql.updatedIds[generalizedTable.Name] = append(mssql.updatedIds[generalizedTable.Name], elem.Id)
 			}
 		}
 	return nil
 }
 
-func (pg *PostGIS) Delete(id int64, matches interface{}) error {
+func (mssql *Mssql) Delete(id int64, matches interface{}) error {
 	if matches, ok := matches.([]mapping.Match); ok {
 		for _, match := range matches {
-			pg.txRouter.Delete(match.Table.Name, id)
+			mssql.txRouter.Delete(match.Table.Name, id)
 		}
-		if pg.updateGeneralizedTables {
-			for _, generalizedTable := range pg.generalizedFromMatches(matches) {
-				pg.txRouter.Delete(generalizedTable.Name, id)
+		if mssql.updateGeneralizedTables {
+			for _, generalizedTable := range mssql.generalizedFromMatches(matches) {
+				mssql.txRouter.Delete(generalizedTable.Name, id)
 			}
 		}
 	}
 	return nil
 }
 
-func (pg *PostGIS) DeleteElem(elem element.OSMElem) error {
+func (mssql *Mssql) DeleteElem(elem element.OSMElem) error {
 	// handle deletes of geometries that did not match in ProbeXxx.
 	// we have to handle multipolygon relations that took the tags of the
 	// main-member. those tags are not avail. during delete. just try to
 	// delete from each polygon table.
 	if v, ok := elem.Tags["type"]; ok && (v == "multipolygon" || v == "boundary") {
-		for _, tableSpec := range pg.Tables {
+		for _, tableSpec := range mssql.Tables {
 			if tableSpec.GeometryType != "polygon" {
 				continue
 			}
-			pg.txRouter.Delete(tableSpec.Name, elem.Id)
-			if pg.updateGeneralizedTables {
+			mssql.txRouter.Delete(tableSpec.Name, elem.Id)
+			if mssql.updateGeneralizedTables {
 				for _, genTable := range tableSpec.Generalizations {
-					pg.txRouter.Delete(genTable.Name, elem.Id)
+					mssql.txRouter.Delete(genTable.Name, elem.Id)
 				}
 			}
 		}
@@ -544,21 +544,21 @@ func (pg *PostGIS) DeleteElem(elem element.OSMElem) error {
 	return nil
 }
 
-func (pg *PostGIS) generalizedFromMatches(matches []mapping.Match) []*GeneralizedTableSpec {
+func (mssql *Mssql) generalizedFromMatches(matches []mapping.Match) []*GeneralizedTableSpec {
 	generalizedTables := []*GeneralizedTableSpec{}
 	for _, match := range matches {
-		tbl := pg.Tables[match.Table.Name]
+		tbl := mssql.Tables[match.Table.Name]
 		generalizedTables = append(generalizedTables, tbl.Generalizations...)
 	}
 	return generalizedTables
 }
 
-func (pg *PostGIS) sortedGeneralizedTables() []string {
+func (mssql *Mssql) sortedGeneralizedTables() []string {
 	added := map[string]bool{}
 	sorted := []string{}
 
-	for len(pg.GeneralizedTables) > len(sorted) {
-		for _, tbl := range pg.GeneralizedTables {
+	for len(mssql.GeneralizedTables) > len(sorted) {
+		for _, tbl := range mssql.GeneralizedTables {
 			if _, ok := added[tbl.Name]; !ok {
 				if tbl.Source != nil || added[tbl.SourceGeneralized.Name] {
 					added[tbl.Name] = true
@@ -570,38 +570,38 @@ func (pg *PostGIS) sortedGeneralizedTables() []string {
 	return sorted
 }
 
-func (pg *PostGIS) EnableGeneralizeUpdates() {
-	pg.updateGeneralizedTables = true
-	pg.updatedIds = make(map[string][]int64)
+func (mssql *Mssql) EnableGeneralizeUpdates() {
+	mssql.updateGeneralizedTables = true
+	mssql.updatedIds = make(map[string][]int64)
 }
 
-func (pg *PostGIS) Begin() error {
+func (mssql *Mssql) Begin() error {
 	var err error
-	pg.txRouter, err = newTxRouter(pg, false)
+	mssql.txRouter, err = newTxRouter(mssql, false)
 	return err
 }
 
 /*
-func (pg *PostGIS) BeginBulk() error {
+func (mssql *Mssql) BeginBulk() error {
 	var err error
-	pg.txRouter, err = newTxRouter(pg, true)
+	mssql.txRouter, err = newTxRouter(mssql, true)
 	return err
 }
 */
-func (pg *PostGIS) Abort() error {
-	return pg.txRouter.Abort()
+func (mssql *Mssql) Abort() error {
+	return mssql.txRouter.Abort()
 }
 
-func (pg *PostGIS) End() error {
-	return pg.txRouter.End()
+func (mssql *Mssql) End() error {
+	return mssql.txRouter.End()
 }
 
-func (pg *PostGIS) Close() error {
-	return pg.Db.Close()
+func (mssql *Mssql) Close() error {
+	return mssql.Db.Close()
 }
 
 func New(conf database.Config, m *mapping.Mapping) (database.DB, error) {
-	db := &PostGIS{}
+	db := &Mssql{}
 
 	db.Tables = make(map[string]*TableSpec)
 	db.GeneralizedTables = make(map[string]*GeneralizedTableSpec)
@@ -642,11 +642,11 @@ func New(conf database.Config, m *mapping.Mapping) (database.DB, error) {
 // prepareGeneralizedTableSources checks if all generalized table have an
 // existing source and sets .Source to the original source (works even
 // when source is allready generalized).
-func (pg *PostGIS) prepareGeneralizedTableSources() {
-	for name, table := range pg.GeneralizedTables {
-		if source, ok := pg.Tables[table.SourceName]; ok {
+func (mssql *Mssql) prepareGeneralizedTableSources() {
+	for name, table := range mssql.GeneralizedTables {
+		if source, ok := mssql.Tables[table.SourceName]; ok {
 			table.Source = source
-		} else if source, ok := pg.GeneralizedTables[table.SourceName]; ok {
+		} else if source, ok := mssql.GeneralizedTables[table.SourceName]; ok {
 			table.SourceGeneralized = source
 		} else {
 			log.Printf("missing source '%s' for generalized table '%s'\n",
@@ -657,9 +657,9 @@ func (pg *PostGIS) prepareGeneralizedTableSources() {
 	// set source table until all generalized tables have a source
 	for filled := true; filled; {
 		filled = false
-		for _, table := range pg.GeneralizedTables {
+		for _, table := range mssql.GeneralizedTables {
 			if table.Source == nil {
-				if source, ok := pg.GeneralizedTables[table.SourceName]; ok && source.Source != nil {
+				if source, ok := mssql.GeneralizedTables[table.SourceName]; ok && source.Source != nil {
 					table.Source = source.Source
 				}
 				filled = true
@@ -668,10 +668,10 @@ func (pg *PostGIS) prepareGeneralizedTableSources() {
 	}
 }
 
-func (pg *PostGIS) prepareGeneralizations() {
-	for _, table := range pg.GeneralizedTables {
+func (mssql *Mssql) prepareGeneralizations() {
+	for _, table := range mssql.GeneralizedTables {
 		table.Source.Generalizations = append(table.Source.Generalizations, table)
-		if source, ok := pg.GeneralizedTables[table.SourceName]; ok {
+		if source, ok := mssql.GeneralizedTables[table.SourceName]; ok {
 			source.Generalizations = append(source.Generalizations, table)
 		}
 	}
