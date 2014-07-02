@@ -21,10 +21,11 @@ func init() {
 		"string":               {"string", "string", String, nil},
 		"direction":            {"direction", "int8", Direction, nil},
 		"integer":              {"integer", "int32", Integer, nil},
-		"mapping_key":          {"mapping_key", "string", Key, nil},
-		"mapping_value":        {"mapping_value", "string", Value, nil},
+		"mapping_key":          {"mapping_key", "string", KeyName, nil},
+		"mapping_value":        {"mapping_value", "string", ValueName, nil},
 		"geometry":             {"geometry", "geometry", Geometry, nil},
 		"validated_geometry":   {"validated_geometry", "validated_geometry", Geometry, nil},
+		"hstore_tags":          {"hstore_tags", "hstore_string", HstoreString, nil},
 		"wayzorder":            {"wayzorder", "int32", WayZOrder, nil},
 		"pseudoarea":           {"pseudoarea", "float32", PseudoArea, nil},
 		"zorder":               {"zorder", "int32", nil, MakeZOrder},
@@ -36,14 +37,17 @@ type MakeValue func(string, *element.OSMElem, Match) interface{}
 
 type MakeMakeValue func(string, FieldType, Field) (MakeValue, error)
 
+type Key string
+type Value string
+
 type FieldSpec struct {
-	Key  string
+	Key  Key
 	Type FieldType
 }
 
 func (f *FieldSpec) Value(elem *element.OSMElem, match Match) interface{} {
 	if f.Type.Func != nil {
-		return f.Type.Func(elem.Tags[f.Key], elem, match)
+		return f.Type.Func(elem.Tags[string(f.Key)], elem, match)
 	}
 	return nil
 }
@@ -66,6 +70,7 @@ func (field *Field) FieldType() *FieldType {
 			makeValue, err := fieldType.MakeFunc(field.Name, fieldType, *field)
 			if err != nil {
 				log.Print(err)
+				return nil
 			}
 			fieldType = FieldType{fieldType.Name, fieldType.GoType, makeValue, nil}
 		}
@@ -129,11 +134,11 @@ func Id(val string, elem *element.OSMElem, match Match) interface{} {
 	return elem.Id
 }
 
-func Key(val string, elem *element.OSMElem, match Match) interface{} {
+func KeyName(val string, elem *element.OSMElem, match Match) interface{} {
 	return match.Key
 }
 
-func Value(val string, elem *element.OSMElem, match Match) interface{} {
+func ValueName(val string, elem *element.OSMElem, match Match) interface{} {
 	return match.Value
 }
 
@@ -157,6 +162,16 @@ func PseudoArea(val string, elem *element.OSMElem, match Match) interface{} {
 		return nil
 	}
 	return float32(area)
+}
+
+var hstoreReplacer = strings.NewReplacer("\\", "\\\\", "\"", "\\\"")
+
+func HstoreString(val string, elem *element.OSMElem, match Match) interface{} {
+	tags := make([]string, 0, len(elem.Tags))
+	for k, v := range elem.Tags {
+		tags = append(tags, `"`+hstoreReplacer.Replace(k)+`"=>"`+hstoreReplacer.Replace(v)+`"`)
+	}
+	return strings.Join(tags, ", ")
 }
 
 var wayRanks map[string]int

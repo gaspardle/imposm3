@@ -7,19 +7,28 @@ import (
 	"imposm3/expire"
 	"imposm3/geom"
 	"imposm3/geom/geos"
-	"imposm3/proj"
+	"imposm3/mapping"
 	"imposm3/stats"
 	"sync"
 )
 
 type WayWriter struct {
 	OsmElemWriter
-	ways chan *element.Way
+	ways           chan *element.Way
+	lineMatcher    mapping.WayMatcher
+	polygonMatcher mapping.WayMatcher
 }
 
-func NewWayWriter(osmCache *cache.OSMCache, diffCache *cache.DiffCache, ways chan *element.Way,
+func NewWayWriter(
+	osmCache *cache.OSMCache,
+	diffCache *cache.DiffCache,
+	ways chan *element.Way,
 	inserter database.Inserter,
-	progress *stats.Statistics, srid int) *OsmElemWriter {
+	progress *stats.Statistics,
+	polygonMatcher mapping.WayMatcher,
+	lineMatcher mapping.WayMatcher,
+	srid int,
+) *OsmElemWriter {
 	ww := WayWriter{
 		OsmElemWriter: OsmElemWriter{
 			osmCache:  osmCache,
@@ -29,7 +38,9 @@ func NewWayWriter(osmCache *cache.OSMCache, diffCache *cache.DiffCache, ways cha
 			inserter:  inserter,
 			srid:      srid,
 		},
-		ways: ways,
+		lineMatcher:    lineMatcher,
+		polygonMatcher: polygonMatcher,
+		ways:           ways,
 	}
 	ww.OsmElemWriter.writer = &ww
 	return &ww.OsmElemWriter
@@ -54,10 +65,10 @@ func (ww *WayWriter) loop() {
 		if err != nil {
 			continue
 		}
-		proj.NodesToMerc(w.Nodes)
+		ww.NodesToSrid(w.Nodes)
 
 		inserted := false
-		if ok, matches := ww.inserter.ProbeLineString(w.OSMElem); ok {
+		if matches := ww.lineMatcher.MatchWay(w); len(matches) > 0 {
 			err := ww.buildAndInsert(geos, w, matches, false)
 			if err != nil {
 				if errl, ok := err.(ErrorLevel); !ok || errl.Level() > 0 {
@@ -69,7 +80,7 @@ func (ww *WayWriter) loop() {
 		}
 		if w.IsClosed() && !insertedAsRelation {
 			// only add polygons that were not inserted as a MultiPolygon relation
-			if ok, matches := ww.inserter.ProbePolygon(w.OSMElem); ok {
+			if matches := ww.polygonMatcher.MatchWay(w); len(matches) > 0 {
 				err := ww.buildAndInsert(geos, w, matches, true)
 				if err != nil {
 					if errl, ok := err.(ErrorLevel); !ok || errl.Level() > 0 {
@@ -91,7 +102,7 @@ func (ww *WayWriter) loop() {
 	ww.wg.Done()
 }
 
-func (ww *WayWriter) buildAndInsert(g *geos.Geos, w *element.Way, matches interface{}, isPolygon bool) error {
+func (ww *WayWriter) buildAndInsert(g *geos.Geos, w *element.Way, matches []mapping.Match, isPolygon bool) error {
 	var err error
 	var geosgeom *geos.Geom
 	// make copy to avoid interference with polygon/linestring matches

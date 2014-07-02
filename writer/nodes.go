@@ -6,19 +6,25 @@ import (
 	"imposm3/element"
 	"imposm3/geom"
 	"imposm3/geom/geos"
-	"imposm3/proj"
+	"imposm3/mapping"
 	"imposm3/stats"
 	"sync"
 )
 
 type NodeWriter struct {
 	OsmElemWriter
-	nodes chan *element.Node
+	nodes        chan *element.Node
+	pointMatcher mapping.NodeMatcher
 }
 
-func NewNodeWriter(osmCache *cache.OSMCache, nodes chan *element.Node,
-	inserter database.Inserter, progress *stats.Statistics,
-	srid int) *OsmElemWriter {
+func NewNodeWriter(
+	osmCache *cache.OSMCache,
+	nodes chan *element.Node,
+	inserter database.Inserter,
+	progress *stats.Statistics,
+	matcher mapping.NodeMatcher,
+	srid int,
+) *OsmElemWriter {
 	nw := NodeWriter{
 		OsmElemWriter: OsmElemWriter{
 			osmCache: osmCache,
@@ -27,7 +33,8 @@ func NewNodeWriter(osmCache *cache.OSMCache, nodes chan *element.Node,
 			inserter: inserter,
 			srid:     srid,
 		},
-		nodes: nodes,
+		pointMatcher: matcher,
+		nodes:        nodes,
 	}
 	nw.OsmElemWriter.writer = &nw
 	return &nw.OsmElemWriter
@@ -40,8 +47,8 @@ func (nw *NodeWriter) loop() {
 
 	for n := range nw.nodes {
 		nw.progress.AddNodes(1)
-		if ok, matches := nw.inserter.ProbePoint(n.OSMElem); ok {
-			proj.NodeToMerc(n)
+		if matches := nw.pointMatcher.MatchNode(n); len(matches) > 0 {
+			nw.NodeToSrid(n)
 			if nw.expireor != nil {
 				nw.expireor.Expire(n.Long, n.Lat)
 			}

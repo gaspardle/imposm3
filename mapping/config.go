@@ -9,22 +9,20 @@ import (
 
 type Field struct {
 	Name string                 `json:"name"`
-	Key  string                 `json:"key"`
+	Key  Key                    `json:"key"`
 	Type string                 `json:"type"`
 	Args map[string]interface{} `json:"args"`
 }
 
 type Table struct {
-	Name     string
-	Type     TableType             `json:"type"`
-	Mapping  map[string][]string   `json:"mapping"`
-	Mappings map[string]SubMapping `json:"mappings"`
-	Fields   []*Field              `json:"fields"`
-	Filters  *Filters              `json:"filters"`
-}
-
-type SubMapping struct {
-	Mapping map[string][]string
+	Name         string
+	Type         TableType             `json:"type"`
+	Mapping      map[Key][]Value       `json:"mapping"`
+	Mappings     map[string]SubMapping `json:"mappings"`
+	TypeMappings TypeMappings          `json:"type_mappings"`
+	Fields       []*Field              `json:"columns"`
+	OldFields    []*Field              `json:"fields"`
+	Filters      *Filters              `json:"filters"`
 }
 
 type GeneralizedTable struct {
@@ -45,11 +43,27 @@ type GeneralizedTables map[string]*GeneralizedTable
 type Mapping struct {
 	Tables            Tables            `json:"tables"`
 	GeneralizedTables GeneralizedTables `json:"generalized_tables"`
+	Tags              Tags              `json:"tags"`
+}
+
+type Tags struct {
+	LoadAll bool  `json:"load_all"`
+	Exclude []Key `json:"exclude"`
+}
+
+type SubMapping struct {
+	Mapping map[Key][]Value
+}
+
+type TypeMappings struct {
+	Points      map[Key][]Value `json:"points"`
+	LineStrings map[Key][]Value `json:"linestrings"`
+	Polygons    map[Key][]Value `json:"polygons"`
 }
 
 type ElementFilter func(tags *element.Tags) bool
 
-type TagTables map[string]map[string][]DestTable
+type TagTables map[Key]map[Value][]DestTable
 
 type DestTable struct {
 	Name       string
@@ -58,10 +72,29 @@ type DestTable struct {
 
 type TableType string
 
+func (tt *TableType) UnmarshalJSON(data []byte) error {
+	switch string(data) {
+	case "":
+		return errors.New("missing table type")
+	case `"point"`:
+		*tt = PointTable
+	case `"linestring"`:
+		*tt = LineStringTable
+	case `"polygon"`:
+		*tt = PolygonTable
+	case `"geometry"`:
+		*tt = GeometryTable
+	default:
+		return errors.New("unknown type " + string(data))
+	}
+	return nil
+}
+
 const (
 	PolygonTable    TableType = "polygon"
 	LineStringTable TableType = "linestring"
 	PointTable      TableType = "point"
+	GeometryTable   TableType = "geometry"
 )
 
 func NewMapping(filename string) (*Mapping, error) {
@@ -85,8 +118,8 @@ func NewMapping(filename string) (*Mapping, error) {
 	return &mapping, nil
 }
 
-func (t *Table) ExtraTags() map[string]bool {
-	tags := make(map[string]bool)
+func (t *Table) ExtraTags() map[Key]bool {
+	tags := make(map[Key]bool)
 	for _, field := range t.Fields {
 		if field.Key != "" {
 			tags[field.Key] = true
@@ -98,42 +131,35 @@ func (t *Table) ExtraTags() map[string]bool {
 func (m *Mapping) prepare() error {
 	for name, t := range m.Tables {
 		t.Name = name
-	}
-	for name, t := range m.Tables {
-		switch t.Type {
-		case "":
-			return errors.New("missing table type for table " + name)
-		case "point":
-		case "linestring":
-		case "polygon":
-		default:
-			return errors.New("unknown type " + string(t.Type) + " for table " + name)
+		if t.OldFields != nil {
+			// todo deprecate 'fields'
+			t.Fields = t.OldFields
 		}
 	}
+
 	for name, t := range m.GeneralizedTables {
 		t.Name = name
 	}
 	return nil
 }
 
-func (tt TagTables) addFromMapping(mapping map[string][]string, table DestTable) {
+func (tt TagTables) addFromMapping(mapping map[Key][]Value, table DestTable) {
 	for key, vals := range mapping {
 		for _, v := range vals {
 			vals, ok := tt[key]
 			if ok {
 				vals[v] = append(vals[v], table)
 			} else {
-				tt[key] = make(map[string][]DestTable)
+				tt[key] = make(map[Value][]DestTable)
 				tt[key][v] = append(tt[key][v], table)
 			}
 		}
 	}
-
 }
 
 func (m *Mapping) mappings(tableType TableType, mappings TagTables) {
 	for name, t := range m.Tables {
-		if t.Type != tableType {
+		if t.Type != GeometryTable && t.Type != tableType {
 			continue
 		}
 		mappings.addFromMapping(t.Mapping, DestTable{name, ""})
@@ -141,20 +167,29 @@ func (m *Mapping) mappings(tableType TableType, mappings TagTables) {
 		for subMappingName, subMapping := range t.Mappings {
 			mappings.addFromMapping(subMapping.Mapping, DestTable{name, subMappingName})
 		}
+
+		switch tableType {
+		case PointTable:
+			mappings.addFromMapping(t.TypeMappings.Points, DestTable{name, ""})
+		case LineStringTable:
+			mappings.addFromMapping(t.TypeMappings.LineStrings, DestTable{name, ""})
+		case PolygonTable:
+			mappings.addFromMapping(t.TypeMappings.Polygons, DestTable{name, ""})
+		}
 	}
 }
 
 func (m *Mapping) tables(tableType TableType) map[string]*TableFields {
 	result := make(map[string]*TableFields)
 	for name, t := range m.Tables {
-		if t.Type == tableType {
+		if t.Type == tableType || t.Type == "geometry" {
 			result[name] = t.TableFields()
 		}
 	}
 	return result
 }
 
-func (m *Mapping) extraTags(tableType TableType, tags map[string]bool) {
+func (m *Mapping) extraTags(tableType TableType, tags map[Key]bool) {
 	for _, t := range m.Tables {
 		if t.Type != tableType {
 			continue
@@ -164,7 +199,7 @@ func (m *Mapping) extraTags(tableType TableType, tags map[string]bool) {
 		}
 		if t.Filters != nil && t.Filters.ExcludeTags != nil {
 			for _, keyVal := range *t.Filters.ExcludeTags {
-				tags[keyVal[0]] = true
+				tags[Key(keyVal[0])] = true
 			}
 		}
 	}
