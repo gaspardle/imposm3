@@ -7,19 +7,18 @@ import (
 	"os"
 	"path"
 
-	"imposm3/cache"
-	"imposm3/config"
-	"imposm3/database"
-	_ "imposm3/database/postgis"
-	_ "imposm3/database/sqlserver"
-	state "imposm3/diff/state"
-	"imposm3/geom/limit"
-	"imposm3/logging"
-	"imposm3/mapping"
-	"imposm3/parser/pbf"
-	"imposm3/reader"
-	"imposm3/stats"
-	"imposm3/writer"
+	"github.com/omniscale/imposm3/cache"
+	"github.com/omniscale/imposm3/config"
+	"github.com/omniscale/imposm3/database"
+	_ "github.com/omniscale/imposm3/database/postgis"
+	state "github.com/omniscale/imposm3/diff/state"
+	"github.com/omniscale/imposm3/geom/limit"
+	"github.com/omniscale/imposm3/logging"
+	"github.com/omniscale/imposm3/mapping"
+	"github.com/omniscale/imposm3/parser/pbf"
+	"github.com/omniscale/imposm3/reader"
+	"github.com/omniscale/imposm3/stats"
+	"github.com/omniscale/imposm3/writer"
 )
 
 var log = logging.NewLogger("")
@@ -123,12 +122,14 @@ func Import() {
 		elementCounts = progress.Stop()
 		osmCache.Close()
 		log.StopStep(step)
-		diffstate := state.FromPbf(pbfFile)
-		if diffstate != nil {
-			os.MkdirAll(config.BaseOptions.DiffDir, 0755)
-			err := diffstate.WriteToFile(path.Join(config.BaseOptions.DiffDir, "last.state.txt"))
-			if err != nil {
-				log.Print("error writing last.state.txt: ", err)
+		if config.ImportOptions.Diff {
+			diffstate := state.FromPbf(pbfFile, config.ImportOptions.DiffStateBefore)
+			if diffstate != nil {
+				os.MkdirAll(config.BaseOptions.DiffDir, 0755)
+				err := diffstate.WriteToFile(path.Join(config.BaseOptions.DiffDir, "last.state.txt"))
+				if err != nil {
+					log.Print("error writing last.state.txt: ", err)
+				}
 			}
 		}
 	}
@@ -175,7 +176,9 @@ func Import() {
 		osmCache.Coords.SetReadOnly(true)
 
 		relations := osmCache.Relations.Iter()
-		relWriter := writer.NewRelationWriter(osmCache, diffCache, relations,
+		relWriter := writer.NewRelationWriter(osmCache, diffCache,
+			tagmapping.SingleIdSpace,
+			relations,
 			db, progress,
 			tagmapping.PolygonMatcher(),
 			config.BaseOptions.Srid)
@@ -186,7 +189,9 @@ func Import() {
 		osmCache.Relations.Close()
 
 		ways := osmCache.Ways.Iter()
-		wayWriter := writer.NewWayWriter(osmCache, diffCache, ways, db,
+		wayWriter := writer.NewWayWriter(osmCache, diffCache,
+			tagmapping.SingleIdSpace,
+			ways, db,
 			progress,
 			tagmapping.PolygonMatcher(), tagmapping.LineStringMatcher(),
 			config.BaseOptions.Srid)

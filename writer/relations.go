@@ -1,33 +1,41 @@
 package writer
 
 import (
-	"imposm3/cache"
-	"imposm3/database"
-	"imposm3/element"
-	"imposm3/expire"
-	"imposm3/geom"
-	"imposm3/geom/geos"
-	"imposm3/mapping"
-	"imposm3/stats"
 	"sync"
 	"time"
+
+	"github.com/omniscale/imposm3/cache"
+	"github.com/omniscale/imposm3/database"
+	"github.com/omniscale/imposm3/element"
+	"github.com/omniscale/imposm3/expire"
+	"github.com/omniscale/imposm3/geom"
+	"github.com/omniscale/imposm3/geom/geos"
+	"github.com/omniscale/imposm3/mapping"
+	"github.com/omniscale/imposm3/stats"
 )
 
 type RelationWriter struct {
 	OsmElemWriter
+	singleIdSpace  bool
 	rel            chan *element.Relation
 	polygonMatcher mapping.RelWayMatcher
+	maxGap         float64
 }
 
 func NewRelationWriter(
 	osmCache *cache.OSMCache,
 	diffCache *cache.DiffCache,
+	singleIdSpace bool,
 	rel chan *element.Relation,
 	inserter database.Inserter,
 	progress *stats.Statistics,
 	matcher mapping.RelWayMatcher,
 	srid int,
 ) *OsmElemWriter {
+	maxGap := 1e-1 // 0.1m
+	if srid == 4326 {
+		maxGap = 1e-6 // ~0.1m
+	}
 	rw := RelationWriter{
 		OsmElemWriter: OsmElemWriter{
 			osmCache:  osmCache,
@@ -37,11 +45,20 @@ func NewRelationWriter(
 			inserter:  inserter,
 			srid:      srid,
 		},
+		singleIdSpace:  singleIdSpace,
 		polygonMatcher: matcher,
 		rel:            rel,
+		maxGap:         maxGap,
 	}
 	rw.OsmElemWriter.writer = &rw
 	return &rw.OsmElemWriter
+}
+
+func (rw *RelationWriter) relId(id int64) int64 {
+	if !rw.singleIdSpace {
+		return -id
+	}
+	return element.RelIdOffset - id
 }
 
 func (rw *RelationWriter) loop() {
@@ -79,7 +96,7 @@ NextRel:
 
 		// prepare relation first (build rings and compute actual
 		// relation tags)
-		prepedRel, err := geom.PrepareRelation(r, rw.srid)
+		prepedRel, err := geom.PrepareRelation(r, rw.srid, rw.maxGap)
 		if err != nil {
 			if errl, ok := err.(ErrorLevel); !ok || errl.Level() > 0 {
 				log.Warn(err)
@@ -117,7 +134,7 @@ NextRel:
 			}
 			for _, g := range parts {
 				rel := element.Relation(*r)
-				rel.Id = -r.Id
+				rel.Id = rw.relId(r.Id)
 				rel.Geom = &element.Geometry{Geom: g, Wkb: geos.AsEwkbHex(g)}
 				err := rw.inserter.InsertPolygon(rel.OSMElem, matches)
 				if err != nil {
@@ -129,7 +146,7 @@ NextRel:
 			}
 		} else {
 			rel := element.Relation(*r)
-			rel.Id = -r.Id
+			rel.Id = rw.relId(r.Id)
 			err := rw.inserter.InsertPolygon(rel.OSMElem, matches)
 			if err != nil {
 				if errl, ok := err.(ErrorLevel); !ok || errl.Level() > 0 {

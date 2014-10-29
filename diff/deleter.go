@@ -1,13 +1,13 @@
 package diff
 
 import (
-	"imposm3/cache"
-	"imposm3/database"
-	"imposm3/diff/parser"
-	"imposm3/element"
-	"imposm3/expire"
-	"imposm3/mapping"
-	"imposm3/proj"
+	"github.com/omniscale/imposm3/cache"
+	"github.com/omniscale/imposm3/database"
+	"github.com/omniscale/imposm3/diff/parser"
+	"github.com/omniscale/imposm3/element"
+	"github.com/omniscale/imposm3/expire"
+	"github.com/omniscale/imposm3/mapping"
+	"github.com/omniscale/imposm3/proj"
 )
 
 type Deleter struct {
@@ -18,27 +18,29 @@ type Deleter struct {
 	tmLineStrings    mapping.WayMatcher
 	tmPolygons       mapping.RelWayMatcher
 	expireor         expire.Expireor
+	singleIdSpace    bool
 	deletedRelations map[int64]struct{}
 	deletedWays      map[int64]struct{}
 	deletedMembers   map[int64]struct{}
 }
 
 func NewDeleter(db database.Deleter, osmCache *cache.OSMCache, diffCache *cache.DiffCache,
+	singleIdSpace bool,
 	tmPoints mapping.NodeMatcher,
 	tmLineStrings mapping.WayMatcher,
 	tmPolygons mapping.RelWayMatcher,
 ) *Deleter {
 	return &Deleter{
-		db,
-		osmCache,
-		diffCache,
-		tmPoints,
-		tmLineStrings,
-		tmPolygons,
-		nil,
-		make(map[int64]struct{}),
-		make(map[int64]struct{}),
-		make(map[int64]struct{}),
+		delDb:            db,
+		osmCache:         osmCache,
+		diffCache:        diffCache,
+		tmPoints:         tmPoints,
+		tmLineStrings:    tmLineStrings,
+		tmPolygons:       tmPolygons,
+		singleIdSpace:    singleIdSpace,
+		deletedRelations: make(map[int64]struct{}),
+		deletedWays:      make(map[int64]struct{}),
+		deletedMembers:   make(map[int64]struct{}),
 	}
 }
 
@@ -48,6 +50,24 @@ func (d *Deleter) SetExpireor(exp expire.Expireor) {
 
 func (d *Deleter) DeletedMemberWays() map[int64]struct{} {
 	return d.deletedMembers
+}
+
+func (d *Deleter) nodeId(id int64) int64 {
+	return id
+}
+
+func (d *Deleter) WayId(id int64) int64 {
+	if !d.singleIdSpace {
+		return id
+	}
+	return -id
+}
+
+func (d *Deleter) RelId(id int64) int64 {
+	if !d.singleIdSpace {
+		return -id
+	}
+	return element.RelIdOffset - id
 }
 
 func (d *Deleter) deleteRelation(id int64, deleteRefs bool, deleteMembers bool) error {
@@ -64,7 +84,7 @@ func (d *Deleter) deleteRelation(id int64, deleteRefs bool, deleteMembers bool) 
 		return nil
 	}
 	if matches := d.tmPolygons.MatchRelation(elem); len(matches) > 0 {
-		if err := d.delDb.Delete(-elem.Id, matches); err != nil {
+		if err := d.delDb.Delete(d.RelId(elem.Id), matches); err != nil {
 			return err
 		}
 	} else {
@@ -137,13 +157,13 @@ func (d *Deleter) deleteWay(id int64, deleteRefs bool) error {
 	}
 	deleted := false
 	if matches := d.tmPolygons.MatchWay(elem); len(matches) > 0 {
-		if err := d.delDb.Delete(elem.Id, matches); err != nil {
+		if err := d.delDb.Delete(d.WayId(elem.Id), matches); err != nil {
 			return err
 		}
 		deleted = true
 	}
 	if matches := d.tmLineStrings.MatchWay(elem); len(matches) > 0 {
-		if err := d.delDb.Delete(elem.Id, matches); err != nil {
+		if err := d.delDb.Delete(d.WayId(elem.Id), matches); err != nil {
 			return err
 		}
 		deleted = true
@@ -179,7 +199,7 @@ func (d *Deleter) deleteNode(id int64) error {
 	deleted := false
 
 	if matches := d.tmPoints.MatchNode(elem); len(matches) > 0 {
-		if err := d.delDb.Delete(elem.Id, matches); err != nil {
+		if err := d.delDb.Delete(d.nodeId(elem.Id), matches); err != nil {
 			return err
 		}
 		deleted = true

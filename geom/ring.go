@@ -1,8 +1,8 @@
 package geom
 
 import (
-	"imposm3/element"
-	"imposm3/geom/geos"
+	"github.com/omniscale/imposm3/element"
+	"github.com/omniscale/imposm3/geom/geos"
 )
 
 type Ring struct {
@@ -18,6 +18,10 @@ type Ring struct {
 
 func (r *Ring) IsClosed() bool {
 	return len(r.refs) >= 4 && r.refs[0] == r.refs[len(r.refs)-1]
+}
+
+func (r *Ring) TryClose(maxRingGap float64) bool {
+	return element.TryCloseWay(r.refs, r.nodes, maxRingGap)
 }
 
 func (r *Ring) MarkInserted(tags element.Tags) {
@@ -87,21 +91,24 @@ func mergeRings(rings []*Ring) []*Ring {
 		}
 		left := ring.refs[0]
 		right := ring.refs[len(ring.refs)-1]
+
 		if origRing, ok := endpoints[left]; ok {
+			// left node connects to..
 			delete(endpoints, left)
 			if left == origRing.refs[len(origRing.refs)-1] {
+				// .. right end
 				origRing.refs = append(origRing.refs, ring.refs[1:]...)
 				origRing.nodes = append(origRing.nodes, ring.nodes[1:]...)
 			} else {
+				// .. left end, reverse ring
 				reverseRefs(origRing.refs)
 				origRing.refs = append(origRing.refs, ring.refs[1:]...)
 				reverseNodes(origRing.nodes)
 				origRing.nodes = append(origRing.nodes, ring.nodes[1:]...)
 			}
 			origRing.ways = append(origRing.ways, ring.ways...)
-			// TODO tags
 			if rightRing, ok := endpoints[right]; ok && rightRing != origRing {
-				// close gap
+				// right node connects to another ring, close ring
 				delete(endpoints, right)
 				if right == rightRing.refs[0] {
 					origRing.refs = append(origRing.refs, rightRing.refs[1:]...)
@@ -115,25 +122,27 @@ func mergeRings(rings []*Ring) []*Ring {
 				origRing.ways = append(origRing.ways, rightRing.ways...)
 				right := origRing.refs[len(origRing.refs)-1]
 				endpoints[right] = origRing
-
 			} else {
 				endpoints[right] = origRing
 			}
 		} else if origRing, ok := endpoints[right]; ok {
+			// right node connects to..
 			delete(endpoints, right)
 			if right == origRing.refs[0] {
+				// .. left end
 				origRing.refs = append(ring.refs[:len(ring.refs)-1], origRing.refs...)
 				origRing.nodes = append(ring.nodes[:len(ring.nodes)-1], origRing.nodes...)
 			} else {
+				// .. right end, reverse ring
 				reverseRefs(ring.refs)
 				origRing.refs = append(origRing.refs[:len(origRing.refs)-1], ring.refs...)
 				reverseNodes(ring.nodes)
 				origRing.nodes = append(origRing.nodes[:len(origRing.nodes)-1], ring.nodes...)
 			}
 			origRing.ways = append(origRing.ways, ring.ways...)
-			// TODO tags
 			endpoints[left] = origRing
 		} else {
+			// ring is not connected (yet)
 			endpoints[left] = ring
 			endpoints[right] = ring
 		}

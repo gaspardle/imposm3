@@ -5,21 +5,21 @@ import (
 	"fmt"
 	"io"
 
-	"imposm3/cache"
-	"imposm3/config"
-	"imposm3/database"
-	_ "imposm3/database/postgis"
-	"imposm3/diff/parser"
-	diffstate "imposm3/diff/state"
-	"imposm3/element"
-	"imposm3/expire"
-	"imposm3/geom/geos"
-	"imposm3/geom/limit"
-	"imposm3/logging"
-	"imposm3/mapping"
-	"imposm3/proj"
-	"imposm3/stats"
-	"imposm3/writer"
+	"github.com/omniscale/imposm3/cache"
+	"github.com/omniscale/imposm3/config"
+	"github.com/omniscale/imposm3/database"
+	_ "github.com/omniscale/imposm3/database/postgis"
+	"github.com/omniscale/imposm3/diff/parser"
+	diffstate "github.com/omniscale/imposm3/diff/state"
+	"github.com/omniscale/imposm3/element"
+	"github.com/omniscale/imposm3/expire"
+	"github.com/omniscale/imposm3/geom/geos"
+	"github.com/omniscale/imposm3/geom/limit"
+	"github.com/omniscale/imposm3/logging"
+	"github.com/omniscale/imposm3/mapping"
+	"github.com/omniscale/imposm3/proj"
+	"github.com/omniscale/imposm3/stats"
+	"github.com/omniscale/imposm3/writer"
 )
 
 var log = logging.NewLogger("diff")
@@ -83,6 +83,7 @@ func Update(oscFile string, geometryLimiter *limit.Limiter, expireor expire.Expi
 		delDb,
 		osmCache,
 		diffCache,
+		tagmapping.SingleIdSpace,
 		tagmapping.PointMatcher(),
 		tagmapping.LineStringMatcher(),
 		tagmapping.PolygonMatcher(),
@@ -98,7 +99,9 @@ func Update(oscFile string, geometryLimiter *limit.Limiter, expireor expire.Expi
 	ways := make(chan *element.Way)
 	nodes := make(chan *element.Node)
 
-	relWriter := writer.NewRelationWriter(osmCache, diffCache, relations,
+	relWriter := writer.NewRelationWriter(osmCache, diffCache,
+		tagmapping.SingleIdSpace,
+		relations,
 		db, progress,
 		tagmapping.PolygonMatcher(),
 		config.BaseOptions.Srid)
@@ -106,7 +109,9 @@ func Update(oscFile string, geometryLimiter *limit.Limiter, expireor expire.Expi
 	relWriter.SetExpireor(expireor)
 	relWriter.Start()
 
-	wayWriter := writer.NewWayWriter(osmCache, diffCache, ways, db,
+	wayWriter := writer.NewWayWriter(osmCache, diffCache,
+		tagmapping.SingleIdSpace,
+		ways, db,
 		progress,
 		tagmapping.PolygonMatcher(),
 		tagmapping.LineStringMatcher(),
@@ -152,6 +157,7 @@ For:
 					return err
 				}
 				if !elem.Add {
+					// no new or modified elem -> remove from cache
 					if elem.Rel != nil {
 						if err := osmCache.Relations.DeleteRelation(elem.Rel.Id); err != nil {
 							return err
@@ -168,6 +174,11 @@ For:
 						if err := osmCache.Coords.DeleteCoord(elem.Node.Id); err != nil {
 							return err
 						}
+					}
+				} else if elem.Node != nil && elem.Node.Tags == nil {
+					// handle modifies where a node drops all tags
+					if err := osmCache.Nodes.DeleteNode(elem.Node.Id); err != nil {
+						return err
 					}
 				}
 			}

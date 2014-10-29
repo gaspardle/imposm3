@@ -1,12 +1,18 @@
 package element
 
 import (
+	"fmt"
+	"math"
 	"sort"
 
-	"imposm3/geom/geos"
+	"github.com/omniscale/imposm3/geom/geos"
 )
 
 type Tags map[string]string
+
+func (t *Tags) String() string {
+	return fmt.Sprintf("%v", (map[string]string)(*t))
+}
 
 type OSMElem struct {
 	Id   int64     `json:"-"`
@@ -33,6 +39,26 @@ type Geometry struct {
 
 func (w *Way) IsClosed() bool {
 	return len(w.Refs) >= 4 && w.Refs[0] == w.Refs[len(w.Refs)-1]
+}
+
+func (w *Way) TryClose(maxGap float64) bool {
+	return TryCloseWay(w.Refs, w.Nodes, maxGap)
+}
+
+// TryCloseWay closes the way if both end nodes are nearly identical.
+// Returns true if it succeeds.
+func TryCloseWay(refs []int64, nodes []Node, maxGap float64) bool {
+	if len(refs) < 4 {
+		return false
+	}
+	start, end := nodes[0], nodes[len(nodes)-1]
+	dist := math.Hypot(start.Lat-end.Lat, start.Long-end.Long)
+	if dist < maxGap {
+		refs[len(refs)-1] = refs[0]
+		nodes[len(nodes)-1] = nodes[0]
+		return true
+	}
+	return false
 }
 
 type MemberType int
@@ -89,3 +115,17 @@ func (idRefs *IdRefs) Delete(ref int64) {
 		idRefs.Refs = append(idRefs.Refs[:i], idRefs.Refs[i+1:]...)
 	}
 }
+
+// RelIdOffset is a constant we subtract from relation IDs
+// to avoid conflicts with way and node IDs.
+// Nodes, ways and relations have separate ID spaces in OSM, but
+// we need unique IDs for updating and removing elements in diff mode.
+// In a normal diff import relation IDs are negated to distinguish them
+// from way IDs, because ways and relations can both be imported in the
+// same polygon table.
+// Nodes are only imported together with ways and relations in single table
+// imports (see `type_mappings`). In this case we negate the way and
+// relation IDs and aditionaly subtract RelIdOffset from the relation IDs.
+// Ways will go from -0 to -100,000,000,000,000,000, relations from
+// -100,000,000,000,000,000 down wards.
+const RelIdOffset = -1e17

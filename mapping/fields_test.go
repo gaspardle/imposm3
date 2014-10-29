@@ -1,8 +1,9 @@
 package mapping
 
 import (
-	"imposm3/element"
 	"testing"
+
+	"github.com/omniscale/imposm3/element"
 )
 
 func TestBool(t *testing.T) {
@@ -65,13 +66,51 @@ func TestInteger(t *testing.T) {
 	if v := Integer("19082139812039812093908123", nil, match); v != nil {
 		t.Errorf("19082139812039812093908123 -> %v", v)
 	}
+}
 
+func TestZOrder(t *testing.T) {
+	match := Match{}
+
+	zOrder, err := MakeZOrder("z_order",
+		AvailableFieldTypes["z_order"],
+		Field{
+			Name: "z_order",
+			Key:  "",
+			Type: "z_order",
+			Args: map[string]interface{}{"key": "fips", "ranks": []interface{}{"AA", "CC", "FF", "ZZ"}},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	elem := &element.OSMElem{}
+
+	elem.Tags = element.Tags{} // missing
+	if v := zOrder("", elem, match); v != 0 {
+		t.Errorf(" -> %v", v)
+	}
+	elem.Tags = element.Tags{"fips": "ABCD"} // unknown
+	if v := zOrder("", elem, match); v != 0 {
+		t.Errorf(" -> %v", v)
+	}
+	elem.Tags = element.Tags{"fips": "AA"}
+	if v := zOrder("", elem, match); v != 4 {
+		t.Errorf(" -> %v", v)
+	}
+	elem.Tags = element.Tags{"fips": "CC"}
+	if v := zOrder("", elem, match); v != 3 {
+		t.Errorf(" -> %v", v)
+	}
+	elem.Tags = element.Tags{"fips": "ZZ"}
+	if v := zOrder("", elem, match); v != 1 {
+		t.Errorf(" -> %v", v)
+	}
 }
 
 func TestMakeSuffixReplace(t *testing.T) {
 	field := Field{
-		"name", "name", "string_suffixreplace",
-		map[string]interface{}{"suffixes": map[string]interface{}{"Straße": "Str.", "straße": "str."}}}
+		Name: "name", Key: "name", Type: "string_suffixreplace",
+		Args: map[string]interface{}{"suffixes": map[string]interface{}{"Straße": "Str.", "straße": "str."}}}
 	suffixReplace, err := MakeSuffixReplace("name", FieldType{}, field)
 
 	if err != nil {

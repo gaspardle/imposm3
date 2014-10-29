@@ -1,27 +1,31 @@
 package writer
 
 import (
-	"imposm3/cache"
-	"imposm3/database"
-	"imposm3/element"
-	"imposm3/expire"
-	"imposm3/geom"
-	"imposm3/geom/geos"
-	"imposm3/mapping"
-	"imposm3/stats"
 	"sync"
+
+	"github.com/omniscale/imposm3/cache"
+	"github.com/omniscale/imposm3/database"
+	"github.com/omniscale/imposm3/element"
+	"github.com/omniscale/imposm3/expire"
+	"github.com/omniscale/imposm3/geom"
+	"github.com/omniscale/imposm3/geom/geos"
+	"github.com/omniscale/imposm3/mapping"
+	"github.com/omniscale/imposm3/stats"
 )
 
 type WayWriter struct {
 	OsmElemWriter
+	singleIdSpace  bool
 	ways           chan *element.Way
 	lineMatcher    mapping.WayMatcher
 	polygonMatcher mapping.WayMatcher
+	maxGap         float64
 }
 
 func NewWayWriter(
 	osmCache *cache.OSMCache,
 	diffCache *cache.DiffCache,
+	singleIdSpace bool,
 	ways chan *element.Way,
 	inserter database.Inserter,
 	progress *stats.Statistics,
@@ -29,6 +33,10 @@ func NewWayWriter(
 	lineMatcher mapping.WayMatcher,
 	srid int,
 ) *OsmElemWriter {
+	maxGap := 1e-1 // 0.1m
+	if srid == 4326 {
+		maxGap = 1e-6 // ~0.1m
+	}
 	ww := WayWriter{
 		OsmElemWriter: OsmElemWriter{
 			osmCache:  osmCache,
@@ -38,12 +46,21 @@ func NewWayWriter(
 			inserter:  inserter,
 			srid:      srid,
 		},
+		singleIdSpace:  singleIdSpace,
 		lineMatcher:    lineMatcher,
 		polygonMatcher: polygonMatcher,
 		ways:           ways,
+		maxGap:         maxGap,
 	}
 	ww.OsmElemWriter.writer = &ww
 	return &ww.OsmElemWriter
+}
+
+func (ww *WayWriter) wayId(id int64) int64 {
+	if !ww.singleIdSpace {
+		return id
+	}
+	return -id
 }
 
 func (ww *WayWriter) loop() {
@@ -67,6 +84,8 @@ func (ww *WayWriter) loop() {
 		}
 		ww.NodesToSrid(w.Nodes)
 
+		w.Id = ww.wayId(w.Id)
+
 		inserted := false
 		if matches := ww.lineMatcher.MatchWay(w); len(matches) > 0 {
 			err := ww.buildAndInsert(geos, w, matches, false)
@@ -78,7 +97,7 @@ func (ww *WayWriter) loop() {
 			}
 			inserted = true
 		}
-		if w.IsClosed() && !insertedAsRelation {
+		if !insertedAsRelation && (w.IsClosed() || w.TryClose(ww.maxGap)) {
 			// only add polygons that were not inserted as a MultiPolygon relation
 			if matches := ww.polygonMatcher.MatchWay(w); len(matches) > 0 {
 				err := ww.buildAndInsert(geos, w, matches, true)

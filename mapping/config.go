@@ -3,13 +3,15 @@ package mapping
 import (
 	"encoding/json"
 	"errors"
-	"imposm3/element"
 	"os"
+
+	"github.com/omniscale/imposm3/element"
 )
 
 type Field struct {
 	Name string                 `json:"name"`
 	Key  Key                    `json:"key"`
+	Keys []Key                  `json:"keys"`
 	Type string                 `json:"type"`
 	Args map[string]interface{} `json:"args"`
 }
@@ -20,7 +22,7 @@ type Table struct {
 	Mapping      map[Key][]Value       `json:"mapping"`
 	Mappings     map[string]SubMapping `json:"mappings"`
 	TypeMappings TypeMappings          `json:"type_mappings"`
-	Fields       []*Field              `json:"columns"`
+	Fields       []*Field              `json:"columns"` // TODO rename Fields internaly to Columns
 	OldFields    []*Field              `json:"fields"`
 	Filters      *Filters              `json:"filters"`
 }
@@ -44,6 +46,9 @@ type Mapping struct {
 	Tables            Tables            `json:"tables"`
 	GeneralizedTables GeneralizedTables `json:"generalized_tables"`
 	Tags              Tags              `json:"tags"`
+	// SingleIdSpace mangles the overlapping node/way/relation IDs
+	// to be unique (nodes positive, ways negative, relations negative -1e17)
+	SingleIdSpace bool `json:"use_single_id_space"`
 }
 
 type Tags struct {
@@ -123,6 +128,9 @@ func (t *Table) ExtraTags() map[Key]bool {
 	for _, field := range t.Fields {
 		if field.Key != "" {
 			tags[field.Key] = true
+		}
+		for _, k := range field.Keys {
+			tags[k] = true
 		}
 	}
 	return tags

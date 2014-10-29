@@ -4,6 +4,12 @@ import helper as t
 
 mapping_file = 'complete_db_mapping.json'
 
+def setup():
+    t.setup()
+
+def teardown():
+    t.teardown()
+
 #######################################################################
 def test_import():
     """Import succeeds"""
@@ -109,6 +115,14 @@ def test_broken_multipolygon_ways():
     assert t.query_row(t.db_conf, 'osm_landusages', -17101) == None
     assert t.query_row(t.db_conf, 'osm_roads', 17101)['type'] == 'residential'
     assert t.query_row(t.db_conf, 'osm_roads', 17102) == None
+
+def test_node_way_inserted_twice():
+    """Way with multiple mappings is inserted twice in same table"""
+    rows = t.query_row(t.db_conf, 'osm_roads', 18001)
+    rows.sort(key=lambda x: x['type'])
+
+    assert rows[0]['type'] == 'residential'
+    assert rows[1]['type'] == 'tram'
 
 def test_node_way_ref_after_delete_1():
     """Nodes refereces way"""
@@ -240,16 +254,27 @@ def test_generalized_linestring_is_valid():
     assert road['geometry'].is_valid, road['geometry'].wkt
     assert road['geometry'].length > 1000000
 
-@unittest.skip("not implemented")
-def test_relation_with_gap():
-    """Multipolygon with gap (overlapping but different endpoints) gets closed"""
+def test_ring_with_gap():
+    """Multipolygon and way with gap (overlapping but different endpoints) gets closed"""
     park = t.query_row(t.db_conf, 'osm_landusages', -7301)
+    assert park['geometry'].is_valid, park
+
+    park = t.query_row(t.db_conf, 'osm_landusages', 7311)
     assert park['geometry'].is_valid, park
 
 def test_updated_nodes1():
     """Zig-Zag line is inserted."""
     road =  t.query_row(t.db_conf, 'osm_roads', 60000)
     t.assert_almost_equal(road['geometry'].length, 14035.61150207768)
+
+def test_update_node_to_coord_1():
+    """Node is inserted with tag."""
+    coords = t.cache_query(nodes=(70001, 70002))
+    assert coords['nodes']["70001"]["tags"] == {"amenity": "police"}
+    assert "tags" not in coords['nodes']["70002"]
+
+    assert t.query_row(t.db_conf, 'osm_amenities', 70001)
+    assert not t.query_row(t.db_conf, 'osm_amenities', 70002)
 
 #######################################################################
 def test_update():
@@ -398,6 +423,17 @@ def test_updated_way2():
     road =  t.query_row(t.db_conf, 'osm_roads', 60000)
     # new length 0.1 degree
     t.assert_almost_equal(road['geometry'].length, 20037508.342789244/180.0/10.0)
+
+def test_update_node_to_coord_2():
+    """Node is becomes coord after tags are removed."""
+    coords = t.cache_query(nodes=(70001, 70002))
+
+    assert "tags" not in coords['nodes']["70001"]
+    assert coords['nodes']["70002"]["tags"] == {"amenity": "police"}
+
+    assert not t.query_row(t.db_conf, 'osm_amenities', 70001)
+    assert t.query_row(t.db_conf, 'osm_amenities', 70002)
+
 
 #######################################################################
 def test_deploy_and_revert_deploy():
