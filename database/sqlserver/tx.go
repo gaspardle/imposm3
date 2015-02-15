@@ -2,7 +2,7 @@ package sqlserver
 
 import (
 	"database/sql"
-	"database/sql/driver"
+	_ "database/sql/driver"
 	"encoding/hex"
 	"fmt"
 	mssqldb "github.com/denisenkom/go-mssqldb"
@@ -63,9 +63,12 @@ func NewBulkTableTx(mssql *Mssql, spec *TableSpec) TableTx {
 func (tt *bulkTableTx) Begin(tx *sql.Tx) error {
 	var err error
 
-	var empty []driver.Value
+	stmt, err := tt.Cn.Prepare(fmt.Sprintf(`TRUNCATE TABLE %s.%s`, tt.Pg.Config.ImportSchema, tt.Table))
+	if err != nil {
+		return err
+	}
 
-	_, err = tt.Cn.Exec(fmt.Sprintf(`TRUNCATE TABLE %s.%s`, tt.Pg.Config.ImportSchema, tt.Table), empty)
+	_, err = stmt.Exec(nil)
 	if err != nil {
 		return err
 	}
