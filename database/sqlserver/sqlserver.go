@@ -4,10 +4,10 @@ import (
 	"database/sql"
 	"fmt"
 	_ "github.com/denisenkom/go-mssqldb"
-	"imposm3/database"
-	"imposm3/element"
-	"imposm3/logging"
-	"imposm3/mapping"
+	"github.com/omniscale/imposm3/database"
+	"github.com/omniscale/imposm3/element"
+	"github.com/omniscale/imposm3/logging"
+	"github.com/omniscale/imposm3/mapping"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -470,42 +470,42 @@ func (mssql *Mssql) Open() error {
 }
 
 func (mssql *Mssql) InsertPoint(elem element.OSMElem, matches []mapping.Match) error {
-		for _, match := range matches {
-			row := match.Row(&elem)
-			if err := mssql.txRouter.Insert(match.Table.Name, row); err != nil {
-				return err
-			}
+	for _, match := range matches {
+		row := match.Row(&elem)
+		if err := mssql.txRouter.Insert(match.Table.Name, row); err != nil {
+			return err
 		}
+	}
 	return nil
 }
 
 func (mssql *Mssql) InsertLineString(elem element.OSMElem, matches []mapping.Match) error {
-		for _, match := range matches {
-			row := match.Row(&elem)
-			if err := mssql.txRouter.Insert(match.Table.Name, row); err != nil {
-				return err
-			}
+	for _, match := range matches {
+		row := match.Row(&elem)
+		if err := mssql.txRouter.Insert(match.Table.Name, row); err != nil {
+			return err
 		}
-		if mssql.updateGeneralizedTables {
-			for _, generalizedTable := range mssql.generalizedFromMatches(matches) {
-				mssql.updatedIds[generalizedTable.Name] = append(mssql.updatedIds[generalizedTable.Name], elem.Id)
-			}
+	}
+	if mssql.updateGeneralizedTables {
+		for _, generalizedTable := range mssql.generalizedFromMatches(matches) {
+			mssql.updatedIds[generalizedTable.Name] = append(mssql.updatedIds[generalizedTable.Name], elem.Id)
 		}
+	}
 	return nil
 }
 
 func (mssql *Mssql) InsertPolygon(elem element.OSMElem, matches []mapping.Match) error {
-		for _, match := range matches {
-			row := match.Row(&elem)
-			if err := mssql.txRouter.Insert(match.Table.Name, row); err != nil {
-				return err
-			}
+	for _, match := range matches {
+		row := match.Row(&elem)
+		if err := mssql.txRouter.Insert(match.Table.Name, row); err != nil {
+			return err
 		}
-		if mssql.updateGeneralizedTables {
-			for _, generalizedTable := range mssql.generalizedFromMatches(matches) {
-				mssql.updatedIds[generalizedTable.Name] = append(mssql.updatedIds[generalizedTable.Name], elem.Id)
-			}
+	}
+	if mssql.updateGeneralizedTables {
+		for _, generalizedTable := range mssql.generalizedFromMatches(matches) {
+			mssql.updatedIds[generalizedTable.Name] = append(mssql.updatedIds[generalizedTable.Name], elem.Id)
 		}
+	}
 	return nil
 }
 
@@ -581,13 +581,12 @@ func (mssql *Mssql) Begin() error {
 	return err
 }
 
-/*
 func (mssql *Mssql) BeginBulk() error {
 	var err error
 	mssql.txRouter, err = newTxRouter(mssql, true)
 	return err
 }
-*/
+
 func (mssql *Mssql) Abort() error {
 	return mssql.txRouter.Abort()
 }
@@ -615,11 +614,6 @@ func New(conf database.Config, m *mapping.Mapping) (database.DB, error) {
 		)
 	}
 
-	//params, err := pq.ParseURL(db.Config.ConnectionParams)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//params = disableDefaultSslOnLocalhost(params)
 	db.Prefix = prefixFromConnectionParams(db.Config.ConnectionParams)
 
 	for name, table := range m.Tables {
@@ -631,7 +625,6 @@ func New(conf database.Config, m *mapping.Mapping) (database.DB, error) {
 	db.prepareGeneralizedTableSources()
 	db.prepareGeneralizations()
 
-	//db.Params = params
 	err := db.Open()
 	if err != nil {
 		return nil, err

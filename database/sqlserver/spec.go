@@ -2,7 +2,7 @@ package sqlserver
 
 import (
 	"fmt"
-	"imposm3/mapping"
+	"github.com/omniscale/imposm3/mapping"
 	"strings"
 )
 
@@ -80,20 +80,6 @@ func (spec *TableSpec) InsertSQL() string {
 		spec.FullName,
 		columns,
 		placeholders,
-	)
-}
-
-func (spec *TableSpec) CopySQL() string {
-	var cols []string
-	for _, col := range spec.Columns {
-		cols = append(cols, "\""+col.Name+"\"")
-	}
-	columns := strings.Join(cols, ", ")
-
-	return fmt.Sprintf(`COPY "%s"."%s" (%s) FROM STDIN`,
-		spec.Schema,
-		spec.FullName,
-		columns,
 	)
 }
 

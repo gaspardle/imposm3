@@ -11,6 +11,7 @@ import (
 	"github.com/omniscale/imposm3/config"
 	"github.com/omniscale/imposm3/database"
 	_ "github.com/omniscale/imposm3/database/postgis"
+	_ "github.com/omniscale/imposm3/database/sqlserver"
 	state "github.com/omniscale/imposm3/diff/state"
 	"github.com/omniscale/imposm3/geom/limit"
 	"github.com/omniscale/imposm3/logging"

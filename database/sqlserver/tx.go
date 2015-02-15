@@ -2,7 +2,11 @@ package sqlserver
 
 import (
 	"database/sql"
+	"database/sql/driver"
+	"encoding/hex"
 	"fmt"
+	mssqldb "github.com/denisenkom/go-mssqldb"
+	"github.com/gaspardle/go-mssqlclrgeo"
 	"sync"
 )
 
@@ -24,6 +28,9 @@ type bulkTableTx struct {
 	InsertSql  string
 	wg         *sync.WaitGroup
 	rows       chan []interface{}
+
+	Cn       *mssqldb.MssqlConn
+	bulkCopy *mssqldb.MssqlBulk
 }
 
 func NewBulkTableTx(mssql *Mssql, spec *TableSpec) TableTx {
@@ -34,6 +41,20 @@ func NewBulkTableTx(mssql *Mssql, spec *TableSpec) TableTx {
 		wg:    &sync.WaitGroup{},
 		rows:  make(chan []interface{}, 64),
 	}
+
+	mssqlconn, err := mssqldb.OpenConnection(mssql.Config.ConnectionParams)
+	if err != nil {
+		log.Fatal("mssql.New connection failed:", err.Error())
+	}
+	tt.Cn = mssqlconn
+	var columns []string
+	for _, col := range spec.Columns {
+		columns = append(columns, col.Name)
+	}
+	bulkcopy := tt.Cn.CreateBulk(spec.Schema+"."+spec.FullName, columns)
+	bulkcopy.Options.Tablock = true
+	tt.bulkCopy = bulkcopy
+
 	tt.wg.Add(1)
 	go tt.loop()
 	return tt
@@ -41,41 +62,40 @@ func NewBulkTableTx(mssql *Mssql, spec *TableSpec) TableTx {
 
 func (tt *bulkTableTx) Begin(tx *sql.Tx) error {
 	var err error
-	if tx == nil {
-		tx, err = tt.Pg.Db.Begin()
-		if err != nil {
-			return err
-		}
-	}
-	tt.Tx = tx
 
-	//_, err = tx.Exec(fmt.Sprintf(`TRUNCATE TABLE "%s"."%s" RESTART IDENTITY`, tt.Pg.Config.ImportSchema, tt.Table))
-	_, err = tx.Exec(fmt.Sprintf(`TRUNCATE TABLE %s.%s`, tt.Pg.Config.ImportSchema, tt.Table))
+	var empty []driver.Value
+
+	_, err = tt.Cn.Exec(fmt.Sprintf(`TRUNCATE TABLE %s.%s`, tt.Pg.Config.ImportSchema, tt.Table), empty)
 	if err != nil {
 		return err
 	}
-	tt.InsertSql = tt.Spec.InsertSQL()
-	//tt.InsertSql = tt.Spec.CopySQL()
-
-	stmt, err := tt.Tx.Prepare(tt.InsertSql)
-	if err != nil {
-		return &SQLError{tt.InsertSql, err}
-	}
-	tt.InsertStmt = stmt
 
 	return nil
 }
 
 func (tt *bulkTableTx) Insert(row []interface{}) error {
+
+	for idx, col := range tt.Spec.Columns {
+
+		//geometryType
+		if col.Type.Name() == "GEOMETRY" {
+			wkb, _ := hex.DecodeString(row[idx].(string))
+			udt, err := mssqlclrgeo.WkbToUdtGeo(wkb)
+			if err != nil {
+				return err
+			}
+			row[idx] = udt
+		}
+	}
+
 	tt.rows <- row
 	return nil
 }
 
 func (tt *bulkTableTx) loop() {
 	for row := range tt.rows {
-		_, err := tt.InsertStmt.Exec(row...)
+		err := tt.bulkCopy.AddRow(row)
 		if err != nil {
-			// TODO
 			log.Fatal(&SQLInsertError{SQLError{tt.InsertSql, err}, row})
 		}
 	}
@@ -89,20 +109,22 @@ func (tt *bulkTableTx) Delete(id int64) error {
 func (tt *bulkTableTx) End() {
 	close(tt.rows)
 	tt.wg.Wait()
+
+	tt.bulkCopy.Done()
 }
 
 func (tt *bulkTableTx) Commit() error {
 	tt.End()
-	if tt.InsertStmt != nil {
+	/*if tt.InsertStmt != nil {
 		_, err := tt.InsertStmt.Exec()
 		if err != nil {
 			return err
 		}
-	}
-	err := tt.Tx.Commit()
+	}*/
+	/*err := tt.Tx.Commit()
 	if err != nil {
 		return err
-	}
+	}*/
 	tt.Tx = nil
 	return nil
 }
