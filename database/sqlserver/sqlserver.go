@@ -124,7 +124,8 @@ func (mssql *Mssql) createSchema(schema string) error {
 	var err error
 
 	if schema == "public" {
-		return nil
+		//we cant create a schema named public on sql server...
+		return fmt.Errorf("Can't use a schema named 'public'")
 	}
 
 	sql = fmt.Sprintf("SELECT CAST("+
@@ -142,7 +143,7 @@ func (mssql *Mssql) createSchema(schema string) error {
 		return nil
 	}
 
-	sql = fmt.Sprintf("CREATE SCHEMA %s", schema)
+	sql = fmt.Sprintf("CREATE SCHEMA [%s]", schema)
 	_, err = mssql.Db.Exec(sql)
 	if err != nil {
 		return &SQLError{sql, err}
