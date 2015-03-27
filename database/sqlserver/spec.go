@@ -2,6 +2,7 @@ package sqlserver
 
 import (
 	"fmt"
+	mssqldb "github.com/denisenkom/go-mssqldb"
 	"github.com/omniscale/imposm3/mapping"
 	"strings"
 )
@@ -81,6 +82,15 @@ func (spec *TableSpec) InsertSQL() string {
 		columns,
 		placeholders,
 	)
+}
+
+func (spec *TableSpec) CopySQL() string {
+	var cols []string
+	for _, col := range spec.Columns {
+		cols = append(cols, col.Name)
+	}
+
+	return mssqldb.CopyIn(spec.Schema+"."+spec.FullName, cols...)
 }
 
 func (spec *TableSpec) DeleteSQL() string {
