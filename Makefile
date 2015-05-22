@@ -1,4 +1,4 @@
-.PHONY: test all build clean test test-system test-unit update_version
+.PHONY: test all build clean test test-system test-unit update_version docs
 
 PROTOFILES=$(shell find . -name \*.proto)
 PBGOFILES=$(patsubst %.proto,%.pb.go,$(PROTOFILES))
@@ -23,7 +23,7 @@ update_version:
 revert_version:
 	@perl -p -i -e 's/buildVersion = ".*"/buildVersion = ""/' cmd/version.go
 
-imposm3: $(GOFILES) $(PROTOFILES)
+imposm3: $(PBGOFILES)
 	$(MAKE) update_version
 	$(GO) build $(GOLDFLAGS)
 	$(MAKE) revert_version
@@ -45,3 +45,12 @@ test-system: imposm3
 
 %.pb.go: %.proto
 	protoc --go_out=. $^
+
+docs:
+	(cd docs && make html)
+
+REMOTE_DOC_LOCATION = omniscale.de:domains/imposm.org/docs/imposm3
+DOC_VERSION = 3.0.0
+
+upload-docs: docs
+	rsync -a -v -P -z docs/_build/html/ $(REMOTE_DOC_LOCATION)/$(DOC_VERSION)

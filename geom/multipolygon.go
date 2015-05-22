@@ -8,33 +8,45 @@ import (
 	"github.com/omniscale/imposm3/geom/geos"
 )
 
-type preparedRelation struct {
-	rings []*Ring
+type PreparedRelation struct {
+	rings []*ring
 	rel   *element.Relation
 	srid  int
 }
 
-func PrepareRelation(rel *element.Relation, srid int, maxRingGap float64) (*preparedRelation, error) {
-	rings, err := BuildRings(rel, maxRingGap)
+// PrepareRelation is the first step in building a (multi-)polygon of a Relation.
+// It builds rings from all ways and returns an error if there are unclosed rings.
+// It also merges the Relation.Tags with the Tags of the outer way.
+func PrepareRelation(rel *element.Relation, srid int, maxRingGap float64) (PreparedRelation, error) {
+	rings, err := buildRings(rel, maxRingGap)
 	if err != nil {
-		return nil, err
+		return PreparedRelation{}, err
 	}
 
 	rel.Tags = relationTags(rel.Tags, rings[0].ways[0].Tags)
 
-	return &preparedRelation{rings, rel, srid}, nil
+	return PreparedRelation{rings, rel, srid}, nil
 }
 
-func (prep *preparedRelation) Build() (*element.Relation, error) {
-	_, err := BuildRelGeometry(prep.rel, prep.rings, prep.srid)
+// Build creates the (multi)polygon Geometry of the Relation.
+func (prep *PreparedRelation) Build() (Geometry, error) {
+	g := geos.NewGeos()
+	g.SetHandleSrid(prep.srid)
+	defer g.Finish()
+
+	geom, err := buildRelGeometry(g, prep.rel, prep.rings)
 	if err != nil {
-		return nil, err
+		return Geometry{}, err
 	}
-	return prep.rel, nil
 
+	wkb := g.AsEwkbHex(geom)
+	if wkb == nil {
+		return Geometry{}, errors.New("unable to create WKB for relation")
+	}
+	return Geometry{Geom: geom, Wkb: wkb}, nil
 }
 
-func destroyRings(g *geos.Geos, rings []*Ring) {
+func destroyRings(g *geos.Geos, rings []*ring) {
 	for _, r := range rings {
 		if r.geom != nil {
 			g.Destroy(r.geom)
@@ -43,11 +55,11 @@ func destroyRings(g *geos.Geos, rings []*Ring) {
 	}
 }
 
-func BuildRings(rel *element.Relation, maxRingGap float64) ([]*Ring, error) {
-	var rings []*Ring
-	var incompleteRings []*Ring
-	var completeRings []*Ring
-	var mergedRings []*Ring
+func buildRings(rel *element.Relation, maxRingGap float64) ([]*ring, error) {
+	var rings []*ring
+	var incompleteRings []*ring
+	var completeRings []*ring
+	var mergedRings []*ring
 	var err error
 	g := geos.NewGeos()
 	defer g.Finish()
@@ -64,12 +76,12 @@ func BuildRings(rel *element.Relation, maxRingGap float64) ([]*Ring, error) {
 		if member.Way == nil {
 			continue
 		}
-		rings = append(rings, NewRing(member.Way))
+		rings = append(rings, newRing(member.Way))
 	}
 
 	// create geometries for closed rings, collect incomplete rings
 	for _, r := range rings {
-		if r.IsClosed() {
+		if r.isClosed() {
 			r.geom, err = Polygon(g, r.nodes)
 			if err != nil {
 				return nil, err
@@ -87,7 +99,7 @@ func BuildRings(rel *element.Relation, maxRingGap float64) ([]*Ring, error) {
 	}
 	// create geometries for merged rings
 	for _, ring := range mergedRings {
-		if !ring.IsClosed() && !ring.TryClose(maxRingGap) {
+		if !ring.isClosed() && !ring.tryClose(maxRingGap) {
 			err = ErrorNoRing // for defer
 			return nil, err
 		}
@@ -103,26 +115,22 @@ func BuildRings(rel *element.Relation, maxRingGap float64) ([]*Ring, error) {
 	for _, r := range completeRings {
 		r.area = r.geom.Area()
 	}
-	sort.Sort(SortableRingsDesc(completeRings))
+	sort.Sort(sortableRingsDesc(completeRings))
 
 	return completeRings, nil
 }
 
-type SortableRingsDesc []*Ring
+type sortableRingsDesc []*ring
 
-func (r SortableRingsDesc) Len() int           { return len(r) }
-func (r SortableRingsDesc) Less(i, j int) bool { return r[i].area > r[j].area }
-func (r SortableRingsDesc) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
+func (r sortableRingsDesc) Len() int           { return len(r) }
+func (r sortableRingsDesc) Less(i, j int) bool { return r[i].area > r[j].area }
+func (r sortableRingsDesc) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
 
-// BuildRelGeometry builds the geometry of rel by creating a multipolygon of all rings.
+// buildRelGeometry builds the geometry of rel by creating a multipolygon of all rings.
 // rings need to be sorted by area (large to small).
-func BuildRelGeometry(rel *element.Relation, rings []*Ring, srid int) (*geos.Geom, error) {
-	g := geos.NewGeos()
-	g.SetHandleSrid(srid)
-	defer g.Finish()
-
+func buildRelGeometry(g *geos.Geos, rel *element.Relation, rings []*ring) (*geos.Geom, error) {
 	totalRings := len(rings)
-	shells := map[*Ring]bool{rings[0]: true}
+	shells := map[*ring]bool{rings[0]: true}
 	for i := 0; i < totalRings; i++ {
 		testGeom := g.Prepare(rings[i].geom)
 		if testGeom == nil {
@@ -216,12 +224,6 @@ func BuildRelGeometry(rel *element.Relation, rings []*Ring, srid int) (*geos.Geo
 		}
 	}
 
-	wkb := g.AsEwkbHex(result)
-	if wkb == nil {
-		return nil, errors.New("unable to create WKB for relation")
-	}
-	rel.Geom = &element.Geometry{Geom: result, Wkb: wkb}
-
 	return result, nil
 }
 
@@ -250,7 +252,7 @@ func relationTags(relTags, wayTags element.Tags) element.Tags {
 
 // ringIsHole returns true if rings[idx] is a hole, False if it is a
 // shell (also if hole in a hole, etc)
-func ringIsHole(rings []*Ring, idx int) bool {
+func ringIsHole(rings []*ring, idx int) bool {
 
 	containedCounter := 0
 	for {

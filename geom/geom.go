@@ -2,14 +2,20 @@ package geom
 
 import (
 	"errors"
+	"math"
+
 	"github.com/omniscale/imposm3/element"
 	"github.com/omniscale/imposm3/geom/geos"
-	"math"
 )
 
 type GeomError struct {
 	message string
 	level   int
+}
+
+type Geometry struct {
+	Geom *geos.Geom
+	Wkb  []byte
 }
 
 func (e *GeomError) Error() string {
@@ -20,19 +26,19 @@ func (e *GeomError) Level() int {
 	return e.level
 }
 
-func NewGeomError(message string, level int) *GeomError {
+func newGeomError(message string, level int) *GeomError {
 	return &GeomError{message, level}
 }
 
 var (
-	ErrorOneNodeWay = NewGeomError("need at least two separate nodes for way", 0)
-	ErrorNoRing     = NewGeomError("linestrings do not form ring", 0)
+	ErrorOneNodeWay = newGeomError("need at least two separate nodes for way", 0)
+	ErrorNoRing     = newGeomError("linestrings do not form ring", 0)
 )
 
 func Point(g *geos.Geos, node element.Node) (*geos.Geom, error) {
 	geom := g.Point(node.Long, node.Lat)
 	if geom == nil {
-		return nil, NewGeomError("couldn't create point", 1)
+		return nil, newGeomError("couldn't create point", 1)
 	}
 	g.DestroyLater(geom)
 	return geom, nil
@@ -130,13 +136,13 @@ func Polygon(g *geos.Geos, nodes []element.Node) (*geos.Geom, error) {
 	return geom, nil
 }
 
-func AsGeomElement(g *geos.Geos, geom *geos.Geom) (*element.Geometry, error) {
+func AsGeomElement(g *geos.Geos, geom *geos.Geom) (Geometry, error) {
 	wkb := g.AsEwkbHex(geom)
 	if wkb == nil {
-		return nil, errors.New("could not create wkb")
+		return Geometry{}, errors.New("could not create wkb")
 	}
 
-	return &element.Geometry{
+	return Geometry{
 		Wkb:  wkb,
 		Geom: geom,
 	}, nil
