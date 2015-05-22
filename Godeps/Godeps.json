@@ -1,10 +1,15 @@
 {
 	"ImportPath": "github.com/omniscale/imposm3",
-	"GoVersion": "go1.4.1",
-	"Packages": [
-		"./..."
-	],
+	"GoVersion": "go1.4.2",
 	"Deps": [
+		{
+			"ImportPath": "github.com/gaspardle/go-mssqlclrgeo",
+			"Rev": "0d9cffb063a828844376d4ec9d711cd4a557b071"
+		},
+		{
+			"ImportPath": "github.com/gaspardle/go-mssqldb",
+			"Rev": "936bb984342005a0dcc4b1224cac3e653a50b32a"
+		},
 		{
 			"ImportPath": "github.com/golang/protobuf/proto",
 			"Rev": "39e27fc0f226450c58e11eda145b542bc5dff3fe"
