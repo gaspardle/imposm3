@@ -2,7 +2,7 @@ package sqlserver
 
 import (
 	"fmt"
-	mssqldb "github.com/denisenkom/go-mssqldb"
+	mssqldb "github.com/gaspardle/go-mssqldb"
 	"github.com/omniscale/imposm3/mapping"
 	"strings"
 )

@@ -3,9 +3,10 @@ package sqlserver
 import (
 	"database/sql"
 	"fmt"
-	_ "github.com/denisenkom/go-mssqldb"
+	_ "github.com/gaspardle/go-mssqldb"
 	"github.com/omniscale/imposm3/database"
 	"github.com/omniscale/imposm3/element"
+	"github.com/omniscale/imposm3/geom"
 	"github.com/omniscale/imposm3/logging"
 	"github.com/omniscale/imposm3/mapping"
 	"runtime"
@@ -470,9 +471,9 @@ func (mssql *Mssql) Open() error {
 	return nil
 }
 
-func (mssql *Mssql) InsertPoint(elem element.OSMElem, matches []mapping.Match) error {
+func (mssql *Mssql) InsertPoint(elem element.OSMElem, geom geom.Geometry, matches []mapping.Match) error {
 	for _, match := range matches {
-		row := match.Row(&elem)
+		row := match.Row(&elem, &geom)
 		if err := mssql.txRouter.Insert(match.Table.Name, row); err != nil {
 			return err
 		}
@@ -480,9 +481,9 @@ func (mssql *Mssql) InsertPoint(elem element.OSMElem, matches []mapping.Match) e
 	return nil
 }
 
-func (mssql *Mssql) InsertLineString(elem element.OSMElem, matches []mapping.Match) error {
+func (mssql *Mssql) InsertLineString(elem element.OSMElem, geom geom.Geometry, matches []mapping.Match) error {
 	for _, match := range matches {
-		row := match.Row(&elem)
+		row := match.Row(&elem, &geom)
 		if err := mssql.txRouter.Insert(match.Table.Name, row); err != nil {
 			return err
 		}
@@ -495,9 +496,9 @@ func (mssql *Mssql) InsertLineString(elem element.OSMElem, matches []mapping.Mat
 	return nil
 }
 
-func (mssql *Mssql) InsertPolygon(elem element.OSMElem, matches []mapping.Match) error {
+func (mssql *Mssql) InsertPolygon(elem element.OSMElem, geom geom.Geometry, matches []mapping.Match) error {
 	for _, match := range matches {
-		row := match.Row(&elem)
+		row := match.Row(&elem, &geom)
 		if err := mssql.txRouter.Insert(match.Table.Name, row); err != nil {
 			return err
 		}
