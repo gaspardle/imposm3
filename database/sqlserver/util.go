@@ -49,7 +49,7 @@ func dropTableIfExists(tx *sql.Tx, schema, table string) error {
 	if !exists {
 		return nil
 	}
-	sqlStmt := fmt.Sprintf("DROP TABLE %s.%s;",
+	sqlStmt := fmt.Sprintf(`DROP TABLE "%s"."%s";`,
 		schema, table)
 	_, err = tx.Exec(sqlStmt)
 	if err != nil {
@@ -69,7 +69,7 @@ func dropTableIfExists(tx *sql.Tx, schema, table string) error {
 // rollbackIfTx rollsback transaction if tx is not nil.
 func rollbackIfTx(tx **sql.Tx) {
 	if *tx != nil {
-		if err := tx.Rollback(); err != nil {
+		if err := (*tx).Rollback(); err != nil {
 			log.Fatal("rollback failed", err)
 		}
 	}
