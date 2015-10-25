@@ -7,7 +7,7 @@ import (
 )
 
 func BenchmarkTagMatch(b *testing.B) {
-	m, err := NewMapping("matcher_test_mapping.json")
+	m, err := NewMapping("matcher_test_mapping.yml")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -23,22 +23,22 @@ func BenchmarkTagMatch(b *testing.B) {
 
 func makeMember(id int64, tags element.Tags) element.Member {
 	way := &element.Way{
-		element.OSMElem{id, tags},
-		[]int64{0, 1, 2, 0}, // fake closed way, req. for SelectRelationPolygons
-		nil}
+		OSMElem: element.OSMElem{Id: id, Tags: tags},
+		Refs:    []int64{0, 1, 2, 0}, // fake closed way, req. for SelectRelationPolygons
+	}
 	return element.Member{Id: id, Type: element.WAY, Role: "", Way: way}
 }
 
 func makeMemberRole(id int64, tags element.Tags, role string) element.Member {
 	way := &element.Way{
-		element.OSMElem{id, tags},
-		[]int64{0, 1, 2, 0}, // fake closed way, req. for SelectRelationPolygons
-		nil}
+		OSMElem: element.OSMElem{Id: id, Tags: tags},
+		Refs:    []int64{0, 1, 2, 0}, // fake closed way, req. for SelectRelationPolygons
+	}
 	return element.Member{Id: id, Type: element.WAY, Role: role, Way: way}
 }
 
 func TestSelectRelationPolygonsSimple(t *testing.T) {
-	mapping, err := NewMapping("test_mapping.json")
+	mapping, err := NewMapping("test_mapping.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestSelectRelationPolygonsSimple(t *testing.T) {
 }
 
 func TestSelectRelationPolygonsUnrelatedTags(t *testing.T) {
-	mapping, err := NewMapping("test_mapping.json")
+	mapping, err := NewMapping("test_mapping.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestSelectRelationPolygonsUnrelatedTags(t *testing.T) {
 }
 
 func TestSelectRelationPolygonsMultiple(t *testing.T) {
-	mapping, err := NewMapping("test_mapping.json")
+	mapping, err := NewMapping("test_mapping.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestSelectRelationPolygonsMultiple(t *testing.T) {
 }
 
 func TestSelectRelationPolygonsMultipleTags(t *testing.T) {
-	mapping, err := NewMapping("test_mapping.json")
+	mapping, err := NewMapping("test_mapping.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestSelectRelationPolygonsMultipleTags(t *testing.T) {
 }
 
 func TestSelectRelationPolygonsMultipleTagsOnWay(t *testing.T) {
-	mapping, err := NewMapping("test_mapping.json")
+	mapping, err := NewMapping("test_mapping.yml")
 	if err != nil {
 		t.Fatal(err)
 	}

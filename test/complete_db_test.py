@@ -284,6 +284,11 @@ def test_ring_with_gap():
     park = t.query_row(t.db_conf, 'osm_landusages', 7311)
     assert park['geometry'].is_valid, park
 
+def test_multipolygon_with_open_ring():
+    """Multipolygon is inserted even if there is an open ring/member"""
+    park = t.query_row(t.db_conf, 'osm_landusages', -7401)
+    assert park['geometry'].is_valid, park
+
 def test_updated_nodes1():
     """Zig-Zag line is inserted."""
     road =  t.query_row(t.db_conf, 'osm_roads', 60000)
@@ -298,11 +303,30 @@ def test_update_node_to_coord_1():
     assert t.query_row(t.db_conf, 'osm_amenities', 70001)
     assert not t.query_row(t.db_conf, 'osm_amenities', 70002)
 
+def test_enumerate_key():
+    """Enumerate from key."""
+    assert t.query_row(t.db_conf, 'osm_landusages', 100001)['enum'] == 1
+    assert t.query_row(t.db_conf, 'osm_landusages', 100002)['enum'] == 0
+    assert t.query_row(t.db_conf, 'osm_landusages', 100003)['enum'] == 15
+
+
 #######################################################################
 def test_update():
     """Diff import applies"""
     t.imposm3_update(t.db_conf, './build/complete_db.osc.gz', mapping_file)
 #######################################################################
+
+
+def test_no_duplicates():
+    """
+    Relations/ways are only inserted once
+    Checks #66
+    """
+    highways = t.query_duplicates(t.db_conf, 'osm_roads')
+    # one duplicate for test_node_way_inserted_twice is expected
+    assert highways == [[18001, 2]], highways
+    landusages = t.query_duplicates(t.db_conf, 'osm_landusages')
+    assert not landusages, landusages
 
 def test_updated_landusage():
     """Multipolygon relation was modified"""
@@ -456,6 +480,21 @@ def test_update_node_to_coord_2():
     assert not t.query_row(t.db_conf, 'osm_amenities', 70001)
     assert t.query_row(t.db_conf, 'osm_amenities', 70002)
 
+def test_no_duplicate_insert():
+    """
+    Relation is not inserted again if a nother relation with the same way was modified
+    Checks #65
+    """
+    assert t.query_row(t.db_conf, 'osm_landusages', -201191)['type'] == 'park'
+    assert t.query_row(t.db_conf, 'osm_landusages', -201192)['type'] == 'forest'
+    assert t.query_row(t.db_conf, 'osm_roads', 201151)['type'] == 'residential'
+
+def test_unsupported_relation():
+    """
+    Unsupported relation type is not inserted with update
+    """
+    assert not t.query_row(t.db_conf, 'osm_landusages', -201291)
+    assert t.query_row(t.db_conf, 'osm_landusages', 201251)['type'] == 'park'
 
 #######################################################################
 def test_deploy_and_revert_deploy():

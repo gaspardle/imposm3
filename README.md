@@ -10,14 +10,8 @@ It is designed to create databases that are optimized for rendering (i.e. genera
 Imposm 3 is written in Go and it is a complete rewrite of the previous Python implementation.
 Configurations/mappings and cache files are not compatible with Imposm 2, but they share a similar architecture.
 
-
-It is released as open source under the [Apache License 2.0][].
-
-[Apache License 2.0]: http://www.apache.org/licenses/LICENSE-2.0.html
-
-
-The development of Imposm 3 was sponsored by [Omniscale](http://omniscale.com/) and development will continue as resources permit.
-Please get in touch if you need commercial support or if you need specific features.
+The development of Imposm 3 was sponsored by [Omniscale](http://omniscale.com/). There are [commercial licenses available for Imposm](http://omniscale.com/opensource/soss) to support the long-term development of Imposm.
+There is also commercial support available from Omniscale.
 
 
 Features
@@ -86,15 +80,20 @@ Import of Europe 11GB PBF with generalized tables:
 Current status
 --------------
 
-Imposm 3 is used in production but there is no official release yet.
+Imposm 3 is used in production but there is no official 3.0 release yet.
 
-### Missing ###
+### Planned features ###
 
-Compared to Imposm 2:
+There are a few features we like to see in Imposm 3:
 
+* Automatic download and import of differential files
 * Support for other projections than EPSG:3857 or EPSG:4326
-* Import of XML files (unlikely to be implemented in the future, use [osmosis](http://wiki.openstreetmap.org/wiki/Osmosis) to convert XML to PBF first)
+* Support for route relations
+* Improved integration with tile servers (expiration of updated tiles)
 * Custom field/filter functions
+* Official releases with binaries for more platforms
+
+There is no roadmap however, as the implementation of these features largely depends on external funding. There are [commercial licenses available for Imposm](http://omniscale.com/opensource/soss) if you like to help with this development.
 
 Installation
 ------------
@@ -174,6 +173,9 @@ Imposm contains a fixed set of the dependencies that are known to work. You need
     cd src/github.com/omniscale/imposm3
     godep go install ./...
 
+### FreeBSD
+
+On FreeBSD you can use the ports system: Simply fetch https://github.com/thomersch/imposm3-freebsd and run `make install`.
 
 Usage
 -----
@@ -232,6 +234,18 @@ The source code is available at: <https://github.com/omniscale/imposm3/>
 
 You can report any issues at: <https://github.com/omniscale/imposm3/issues>
 
+License
+-------
+
+Imposm 3 is released as open source under the Apache License 2.0. See LICENSE.
+
+All dependencies included as source code are released under a BSD-ish license except the YAML package.
+The YAML package is released as LGPL3 with an exception that permits static linking. See LICENSE.deps.
+
+All dependencies included in binary releases are released under a BSD-ish license except the GEOS package.
+The GEOS package is released as LGPL3 and is linked dynamically. See LICENSE.bin.
+
+
 ### Test ###
 
 #### Unit tests ####
@@ -241,10 +255,24 @@ You can report any issues at: <https://github.com/omniscale/imposm3/issues>
 
 #### System tests ####
 
-There is a system test that imports and updates OSM data and verifies the database content.
-This test is written in Python and requires `nose`, `shapely` and `psycopg2`. You also need `osmosis` to create test PBF files.
+There are system test that import and update OSM data and verify the database content.
+
+##### Dependencies #####
+
+These tests are written in Python and requires `nose`, `shapely` and `psycopg2`.
+
+On a recent Ubuntu can install the following packages for that: `python-nose python-shapely python-psycopg2`
+Or you can [install a Python virtualenv](https://virtualenv.pypa.io/en/latest/installation.html):
+
+    virtualenv imposm3test
+    source imposm3test/bin/activate
+    pip install nose shapely psycopg2
+
+You also need `osmosis` to create test PBF files.
 There is a Makefile that (re)builds `imposm3` and creates all test files if necessary and then runs the test itself.
 
     make test
 
-WARNING: It uses your local PostgeSQL database (`import` schema), if you have one. Change the database with the standard PGXXX environment variables.
+Call `make test-system` to skip the unit tests.
+
+WARNING: It uses your local PostgeSQL database (`import` schema). Change the database with the standard `PGDATABASE`, `PGHOST`, etc. environment variables.

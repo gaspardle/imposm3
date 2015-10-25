@@ -1,41 +1,43 @@
 package mapping
 
 import (
-	"encoding/json"
 	"errors"
-	"os"
+	"fmt"
+	"io/ioutil"
 
 	"github.com/omniscale/imposm3/element"
+
+	"gopkg.in/yaml.v2"
 )
 
 type Field struct {
-	Name string                 `json:"name"`
-	Key  Key                    `json:"key"`
-	Keys []Key                  `json:"keys"`
-	Type string                 `json:"type"`
-	Args map[string]interface{} `json:"args"`
+	Name string                 `yaml:"name"`
+	Key  Key                    `yaml:"key"`
+	Keys []Key                  `yaml:"keys"`
+	Type string                 `yaml:"type"`
+	Args map[string]interface{} `yaml:"args"`
 }
 
 type Table struct {
 	Name         string
-	Type         TableType             `json:"type"`
-	Mapping      map[Key][]Value       `json:"mapping"`
-	Mappings     map[string]SubMapping `json:"mappings"`
-	TypeMappings TypeMappings          `json:"type_mappings"`
-	Fields       []*Field              `json:"columns"` // TODO rename Fields internaly to Columns
-	OldFields    []*Field              `json:"fields"`
-	Filters      *Filters              `json:"filters"`
+	Type         TableType             `yaml:"type"`
+	Mapping      KeyValues             `yaml:"mapping"`
+	Mappings     map[string]SubMapping `yaml:"mappings"`
+	TypeMappings TypeMappings          `yaml:"type_mappings"`
+	Fields       []*Field              `yaml:"columns"` // TODO rename Fields internaly to Columns
+	OldFields    []*Field              `yaml:"fields"`
+	Filters      *Filters              `yaml:"filters"`
 }
 
 type GeneralizedTable struct {
 	Name            string
-	SourceTableName string  `json:"source"`
-	Tolerance       float64 `json:"tolerance"`
-	SqlFilter       string  `json:"sql_filter"`
+	SourceTableName string  `yaml:"source"`
+	Tolerance       float64 `yaml:"tolerance"`
+	SqlFilter       string  `yaml:"sql_filter"`
 }
 
 type Filters struct {
-	ExcludeTags *[][2]string `json:"exclude_tags"`
+	ExcludeTags *[][]string `yaml:"exclude_tags"`
 }
 
 type Tables map[string]*Table
@@ -43,36 +45,78 @@ type Tables map[string]*Table
 type GeneralizedTables map[string]*GeneralizedTable
 
 type Mapping struct {
-	Tables            Tables            `json:"tables"`
-	GeneralizedTables GeneralizedTables `json:"generalized_tables"`
-	Tags              Tags              `json:"tags"`
+	Tables            Tables            `yaml:"tables"`
+	GeneralizedTables GeneralizedTables `yaml:"generalized_tables"`
+	Tags              Tags              `yaml:"tags"`
 	// SingleIdSpace mangles the overlapping node/way/relation IDs
 	// to be unique (nodes positive, ways negative, relations negative -1e17)
-	SingleIdSpace bool `json:"use_single_id_space"`
+	SingleIdSpace bool `yaml:"use_single_id_space"`
 }
 
 type Tags struct {
-	LoadAll bool  `json:"load_all"`
-	Exclude []Key `json:"exclude"`
+	LoadAll bool  `yaml:"load_all"`
+	Exclude []Key `yaml:"exclude"`
+}
+
+type orderedValue struct {
+	value Value
+	order int
+}
+type KeyValues map[Key][]orderedValue
+
+func (kv *KeyValues) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	if *kv == nil {
+		*kv = make(map[Key][]orderedValue)
+	}
+	slice := yaml.MapSlice{}
+	err := unmarshal(&slice)
+	if err != nil {
+		return err
+	}
+	order := 0
+	for _, item := range slice {
+		k, ok := item.Key.(string)
+		if !ok {
+			return fmt.Errorf("mapping key '%s' not a string", k)
+		}
+		values, ok := item.Value.([]interface{})
+		if !ok {
+			return fmt.Errorf("mapping key '%s' not a string", k)
+		}
+		for _, v := range values {
+			if v, ok := v.(string); ok {
+				(*kv)[Key(k)] = append((*kv)[Key(k)], orderedValue{value: Value(v), order: order})
+			} else {
+				return fmt.Errorf("mapping value '%s' not a string", v)
+			}
+			order += 1
+		}
+	}
+	return nil
 }
 
 type SubMapping struct {
-	Mapping map[Key][]Value
+	Mapping KeyValues
 }
 
 type TypeMappings struct {
-	Points      map[Key][]Value `json:"points"`
-	LineStrings map[Key][]Value `json:"linestrings"`
-	Polygons    map[Key][]Value `json:"polygons"`
+	Points      KeyValues `yaml:"points"`
+	LineStrings KeyValues `yaml:"linestrings"`
+	Polygons    KeyValues `yaml:"polygons"`
 }
 
 type ElementFilter func(tags *element.Tags) bool
 
-type TagTables map[Key]map[Value][]DestTable
+type TagTables map[Key]map[Value][]OrderedDestTable
 
 type DestTable struct {
 	Name       string
 	SubMapping string
+}
+
+type OrderedDestTable struct {
+	DestTable
+	order int
 }
 
 type TableType string
@@ -103,15 +147,13 @@ const (
 )
 
 func NewMapping(filename string) (*Mapping, error) {
-	f, err := os.Open(filename)
+	f, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	decoder := json.NewDecoder(f)
 
 	mapping := Mapping{}
-	err = decoder.Decode(&mapping)
+	err = yaml.Unmarshal(f, &mapping)
 	if err != nil {
 		return nil, err
 	}
@@ -151,15 +193,16 @@ func (m *Mapping) prepare() error {
 	return nil
 }
 
-func (tt TagTables) addFromMapping(mapping map[Key][]Value, table DestTable) {
+func (tt TagTables) addFromMapping(mapping KeyValues, table DestTable) {
 	for key, vals := range mapping {
 		for _, v := range vals {
 			vals, ok := tt[key]
+			tbl := OrderedDestTable{DestTable: table, order: v.order}
 			if ok {
-				vals[v] = append(vals[v], table)
+				vals[v.value] = append(vals[v.value], tbl)
 			} else {
-				tt[key] = make(map[Value][]DestTable)
-				tt[key][v] = append(tt[key][v], table)
+				tt[key] = make(map[Value][]OrderedDestTable)
+				tt[key][v.value] = append(tt[key][v.value], tbl)
 			}
 		}
 	}
@@ -170,19 +213,19 @@ func (m *Mapping) mappings(tableType TableType, mappings TagTables) {
 		if t.Type != GeometryTable && t.Type != tableType {
 			continue
 		}
-		mappings.addFromMapping(t.Mapping, DestTable{name, ""})
+		mappings.addFromMapping(t.Mapping, DestTable{Name: name})
 
 		for subMappingName, subMapping := range t.Mappings {
-			mappings.addFromMapping(subMapping.Mapping, DestTable{name, subMappingName})
+			mappings.addFromMapping(subMapping.Mapping, DestTable{Name: name, SubMapping: subMappingName})
 		}
 
 		switch tableType {
 		case PointTable:
-			mappings.addFromMapping(t.TypeMappings.Points, DestTable{name, ""})
+			mappings.addFromMapping(t.TypeMappings.Points, DestTable{Name: name})
 		case LineStringTable:
-			mappings.addFromMapping(t.TypeMappings.LineStrings, DestTable{name, ""})
+			mappings.addFromMapping(t.TypeMappings.LineStrings, DestTable{Name: name})
 		case PolygonTable:
-			mappings.addFromMapping(t.TypeMappings.Polygons, DestTable{name, ""})
+			mappings.addFromMapping(t.TypeMappings.Polygons, DestTable{Name: name})
 		}
 	}
 }
