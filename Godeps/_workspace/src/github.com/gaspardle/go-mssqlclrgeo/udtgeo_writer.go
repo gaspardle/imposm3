@@ -13,18 +13,30 @@ func btou(b bool) uint8 {
 	return 0
 }
 
-func writePoints(buffer *bytes.Buffer, points []Point) (err error) {
+func writePoints(buffer *bytes.Buffer, points []Point, isGeography bool) (err error) {
 
 	for _, point := range points {
+		if isGeography {
+			err = binary.Write(buffer, binary.LittleEndian, &point.Y)
+			if err != nil {
+				return err
+			}
+			err = binary.Write(buffer, binary.LittleEndian, &point.X)
+			if err != nil {
+				return err
+			}
 
-		err = binary.Write(buffer, binary.LittleEndian, &point.X)
-		if err != nil {
-			return err
+		} else {
+			err = binary.Write(buffer, binary.LittleEndian, &point.X)
+			if err != nil {
+				return err
+			}
+			err = binary.Write(buffer, binary.LittleEndian, &point.Y)
+			if err != nil {
+				return err
+			}
 		}
-		err = binary.Write(buffer, binary.LittleEndian, &point.Y)
-		if err != nil {
-			return err
-		}
+
 	}
 	return
 }
@@ -157,7 +169,7 @@ func WriteGeometry(g Geometry, isGeography bool) (data []byte, err error) {
 		}
 	}
 
-	err = writePoints(buffer, g.Points)
+	err = writePoints(buffer, g.Points, isGeography)
 	if err != nil {
 		return nil, err
 	}

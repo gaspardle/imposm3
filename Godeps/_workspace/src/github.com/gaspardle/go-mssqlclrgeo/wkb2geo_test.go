@@ -60,7 +60,7 @@ func TestWkbToUdtGeo(t *testing.T) {
 		wkb, _ := hex.DecodeString(v.wkb)
 		expected_udt, _ := hex.DecodeString(v.expected_udt)
 
-		udt, err := WkbToUdtGeo(wkb)
+		udt, err := WkbToUdtGeo(wkb, false)
 		if err != nil {
 			t.Error(err)
 		}

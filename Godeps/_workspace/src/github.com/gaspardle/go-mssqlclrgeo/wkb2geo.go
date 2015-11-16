@@ -99,14 +99,14 @@ func ParseWkb(data []byte) (g interface{}, err error) {
 
 }
 
-func WkbToUdtGeo(data_wkb []byte) (data_udt []byte, err error) {
+func WkbToUdtGeo(data_wkb []byte, isGeography bool) (data_udt []byte, err error) {
 
 	geom, err := ParseWkb(data_wkb)
 	if err != nil {
 		return nil, err
 	}
 
-	b := NewBuilder()
+	b := NewBuilder(isGeography)
 
 	err = buildType(geom, b)
 	if err != nil {
@@ -123,14 +123,14 @@ func buildType(geom interface{}, b *Builder) (err error) {
 	case *wkbPoint:
 		b.Srid = wkbGeom.wkbGeometry.srid
 		b.AddShape(SHAPE_POINT)
-		b.AddFeature(FIGURE_STROKE)
+		b.AddFigure(FIGURE_STROKE)
 		b.AddPoint(wkbGeom.point.X, wkbGeom.point.Y, wkbGeom.point.Z, wkbGeom.point.M)
 		b.CloseShape()
 
 	case *wkbLineString:
 		b.Srid = wkbGeom.wkbGeometry.srid
 		b.AddShape(SHAPE_LINESTRING)
-		b.AddFeature(FIGURE_STROKE)
+		b.AddFigure(FIGURE_STROKE)
 		for _, point := range wkbGeom.points {
 			b.AddPoint(point.X, point.Y, point.Z, point.M)
 		}
@@ -141,13 +141,14 @@ func buildType(geom interface{}, b *Builder) (err error) {
 		b.AddShape(SHAPE_POLYGON)
 		for idx, ring := range wkbGeom.rings {
 			if idx == 0 {
-				b.AddFeature(FIGURE_EXTERIOR_RING)
+				b.AddFigure(FIGURE_EXTERIOR_RING)
 			} else {
-				b.AddFeature(FIGURE_INTERIOR_RING)
+				b.AddFigure(FIGURE_INTERIOR_RING)
 			}
 			for _, point := range ring.points {
 				b.AddPoint(point.X, point.Y, point.Z, point.M)
 			}
+			b.EndFigure()
 		}
 		b.CloseShape()
 
@@ -156,7 +157,7 @@ func buildType(geom interface{}, b *Builder) (err error) {
 		b.AddShape(SHAPE_MULTIPOINT)
 		for _, p := range wkbGeom.wkbPoints {
 			b.AddShape(SHAPE_POINT)
-			b.AddFeature(FIGURE_STROKE)
+			b.AddFigure(FIGURE_STROKE)
 			b.AddPoint(p.point.X, p.point.Y, p.point.Z, p.point.M)
 			b.CloseShape()
 		}
@@ -167,7 +168,7 @@ func buildType(geom interface{}, b *Builder) (err error) {
 		b.AddShape(SHAPE_MULTILINESTRING)
 		for _, linestring := range wkbGeom.wkbLineStrings {
 			b.AddShape(SHAPE_LINESTRING)
-			b.AddFeature(FIGURE_STROKE)
+			b.AddFigure(FIGURE_STROKE)
 			for _, point := range linestring.points {
 				b.AddPoint(point.X, point.Y, point.Z, point.M)
 			}
@@ -199,7 +200,7 @@ func buildType(geom interface{}, b *Builder) (err error) {
 		b.Srid = wkbGeom.wkbGeometry.srid
 		b.AddShape(SHAPE_CIRCULAR_STRING)
 
-		b.AddFeature(FIGURE_V2_ARC)
+		b.AddFigure(FIGURE_V2_ARC)
 		for _, point := range wkbGeom.points {
 			b.AddPoint(point.X, point.Y, point.Z, point.M)
 		}

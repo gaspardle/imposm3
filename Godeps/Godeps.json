@@ -4,7 +4,7 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/gaspardle/go-mssqlclrgeo",
-			"Rev": "0d9cffb063a828844376d4ec9d711cd4a557b071"
+			"Rev": "8579000a8a3d11608f7df4f60f023d1ae176182a"
 		},
 		{
 			"ImportPath": "github.com/gaspardle/go-mssqldb",
