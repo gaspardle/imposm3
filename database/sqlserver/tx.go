@@ -74,7 +74,7 @@ func (tt *bulkTableTx) Insert(row []interface{}) error {
 		//geometryType
 		if col.Type.Name() == "GEOMETRY" {
 			wkb, _ := hex.DecodeString(row[idx].(string))
-			udt, err := mssqlclrgeo.WkbToUdtGeo(wkb)
+			udt, err := mssqlclrgeo.WkbToUdtGeo(wkb, false)
 			if err != nil {
 				return err
 			}
