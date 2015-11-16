@@ -1,0 +1,26 @@
+diff --git a/Makefile.am b/Makefile.am
+index 3637a27..5e6ae3e 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -154,7 +154,7 @@ libhyperleveldb_la_SOURCES += util/options.cc
+ libhyperleveldb_la_SOURCES += util/status.cc
+ libhyperleveldb_la_SOURCES += port/port_posix.cc
+ libhyperleveldb_la_LIBADD = $(SNAPPY_LIBS) -lpthread
+-libhyperleveldb_la_LDFLAGS = -lpthread $(AM_LDFLAGS) $(LDFLAGS)
++libhyperleveldb_la_LDFLAGS = -no-undefined -lpthread $(AM_LDFLAGS) $(LDFLAGS)
+ 
+ TESTUTIL = util/testutil.cc
+ TESTHARNESS = util/testharness.cc $(TESTUTIL)
+diff --git a/configure.ac b/configure.ac
+index e4cf3f0..848783b 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -39,7 +39,7 @@ m4_define([serial_tests], [
+ AM_INIT_AUTOMAKE(foreign serial_tests subdir-objects dist-bzip2)
+ m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
+ LT_PREREQ([2.2])
+-LT_INIT
++LT_INIT([win32-dll])
+ AC_CONFIG_SRCDIR([include/hyperleveldb/db.h])
+ AC_CONFIG_HEADERS([config.h])
+ AC_CONFIG_MACRO_DIR([m4])
