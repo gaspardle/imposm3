@@ -1,6 +1,15 @@
 import unittest
 
 import helper as t
+import helper_mssql as t_mssql
+
+t.db_conf = t_mssql.db_conf
+t.pg_db_url = t_mssql.pg_db_url
+t.query_row = t_mssql.query_row
+t.query_duplicates = t_mssql.query_duplicates
+t._test_connection = t_mssql._test_connection
+t.table_exists = t_mssql.table_exists
+t.drop_schemas = t_mssql.drop_schemas
 
 mapping_file = 'complete_db_mapping.json'
 
