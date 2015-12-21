@@ -1,0 +1,116 @@
+# Version format
+version: 0.1.{build}
+
+branches:
+  only:
+  - appveyor
+
+# Operating system 
+os: Windows Server 2012 R2
+# Custom clone folder (variables are not expanded here).
+clone_folder: c:\gopath\src\github.com\omniscale\imposm3
+
+# Environment variables
+environment:
+  GOROOT: c:\go
+  GOPATH: c:\gopath
+  PROJ:   github.com\omniscale\imposm3
+
+services:
+  - postgresql94
+cache:
+  - c:\projects\leveldb
+  #- c:\projects\leveldb -> appveyor.yml
+# Scripts that run after cloning repository
+install:
+  - mkdir c:\projects
+  - mkdir c:\projects\deps\include c:\projects\deps\lib c:\projects\deps\bin
+  - set PATH=%GOROOT%\bin;%PATH%
+  - set PATH=%GOPATH%\bin;%PATH%
+  - set PATH=c:\projects\deps\bin;c:\projects\osmosis\bin;C:\msys64\mingw64\bin;C:\msys64\usr\bin;%PATH%;C:\Program Files\PostgreSQL\9.4\bin
+  - C:\msys64\usr\bin\bash -lc "pacman --needed --noconfirm -Sy pacman-mirrors"
+  - C:\msys64\usr\bin\bash -lc "pacman --noconfirm -Sy"
+  - C:\msys64\usr\bin\bash -lc "pacman --noconfirm --needed -S autoconf perl automake libtool make mingw-w64-x86_64-geos protobuf" 
+  - set MSYSTEM=MINGW64
+  - go version
+  - go env 
+  #go dependencies
+  #- go get github.com/golang/protobuf/proto                  
+  #- go get github.com/golang/protobuf/protoc-gen-go
+  - go get github.com/tools/godep
+  # geos
+  - C:\msys64\usr\bin\bash -lc "geos-config --version"
+  # osmosis
+  - ps: (New-Object Net.WebClient).DownloadFile('http://bretth.dev.openstreetmap.org/osmosis-build/osmosis-0.44.1.zip', 'C:\projects\osmosis.zip')
+  - 7z x -y C:\projects\osmosis.zip -oC:\projects\osmosis > nul
+  # protoc
+  - ps: (New-Object Net.WebClient).DownloadFile('https://github.com/google/protobuf/releases/download/v2.6.1/protoc-2.6.1-win32.zip', 'C:\projects\protoc.zip')
+  - 7z x -y C:\projects\protoc.zip -oC:\projects\deps\bin > nul
+  # LevelDB
+  - if not exist c:\projects\leveldb (git clone https://github.com/zalanyib/leveldb-mingw.git c:\projects\leveldb )
+  #- git clone https://github.com/zalanyib/leveldb-mingw.git c:\projects\leveldb  
+
+# To run your custom scripts instead of automatic MSBuild
+build_script:
+  # Build leveldb  
+  - appveyor AddCompilationMessage "Building leveldb"
+  - cd c:\projects\leveldb 
+  - C:\msys64\usr\bin\bash -lc "cd /c/projects/leveldb; PATH=$PATH:/mingw64/bin; exec 0</dev/null; make"
+  - xcopy .\include\leveldb c:\projects\deps\include\leveldb\ /E
+  - copy leveldb.dll c:\projects\deps\bin
+  - copy leveldb.lib c:\projects\deps\lib 
+  # Build Imposm3
+  - cd %APPVEYOR_BUILD_FOLDER%
+  - appveyor AddCompilationMessage "Building Imposm3"
+  - set CGO_CFLAGS=-I c:\projects\deps\include
+  - set CGO_LDFLAGS=-L c:\projects\deps\lib
+  - C:\msys64\usr\bin\bash -lc "cd /c/gopath/src/github.com/omniscale/imposm3; PATH=$PATH:/mingw64/bin; exec 0</dev/null; make build"
+  - appveyor AddCompilationMessage "Build successful" 
+
+before_test:
+  # setup the PostgreSQL database
+  - SET PGUSER=postgres
+  - SET PGPASSWORD=Password12!
+  - createuser --no-superuser --no-createrole --createdb osm
+  - createdb -E UTF8 -O osm imposm3test
+  - psql -d imposm3test -c "CREATE EXTENSION postgis;"
+  - psql -d imposm3test -c "CREATE EXTENSION hstore;" # only required for hstore support
+  - echo ALTER USER osm WITH PASSWORD 'osm'; |psql -d postgres
+  - SET PGUSER=osm
+  - SET PGPASSWORD=osm
+  - SET PGDATABASE=imposm3test
+  # XXX copy dlls in imposm path
+  - copy C:\projects\deps\bin\leveldb.dll C:\gopath\src\github.com\omniscale\imposm3
+  - copy C:\msys64\mingw64\bin\libgeos.dll C:\gopath\src\github.com\omniscale\imposm3
+  - copy C:\msys64\mingw64\bin\libgeos_c.dll C:\gopath\src\github.com\omniscale\imposm3
+  - copy "C:\msys64\mingw64\bin\libstdc++-6.dll" C:\gopath\src\github.com\omniscale\imposm3
+  - copy C:\msys64\mingw64\bin\libwinpthread-1.dll C:\gopath\src\github.com\omniscale\imposm3
+  - copy C:\msys64\mingw64\bin\libgcc_s_seh-1.dll C:\gopath\src\github.com\omniscale\imposm3
+
+# To run your custom scripts instead of automatic tests
+test_script:
+  # Unit tests
+  - echo %PATH%
+  #- ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
+  - ps: Add-AppveyorTest "Unit Tests" -Outcome Running
+  - make test-unit
+  - ps: Update-AppveyorTest "Unit Tests" -Outcome Passed
+  # System tests 
+  - ps: Add-AppveyorTest "System tests" -Outcome Running 
+  #- C:\msys64\usr\bin\bash -lc "cd /c/gopath/src/github.com/omniscale/imposm3; PATH=$PATH:/mingw64/bin; exec 0</dev/null; make test-system" 
+  #- SET PATH=C:\msys64\usr\bin;%PATH%
+  - make test-system 
+  - ps: Update-AppveyorTest "System tests" -Outcome Passed
+
+# on successful build
+on_success:
+  - mkdir C:\projects\imposm3
+  - copy C:\gopath\src\github.com\omniscale\imposm3\imposm3.exe c:\projects\imposm3
+  - copy C:\projects\deps\bin\leveldb.dll c:\projects\imposm3
+  - copy C:\msys64\mingw64\bin\libgeos.dll c:\projects\imposm3
+  - copy C:\msys64\mingw64\bin\libgeos_c.dll c:\projects\imposm3
+  - copy "C:\msys64\mingw64\bin\libstdc++-6.dll" c:\projects\imposm3
+  - copy C:\msys64\mingw64\bin\libwinpthread-1.dll c:\projects\imposm3
+  - copy C:\msys64\mingw64\bin\libgcc_s_seh-1.dll c:\projects\imposm3
+  - 7z a C:\projects\imposm3.zip c:\projects\imposm3
+  - ps: Push-AppveyorArtifact C:\projects\imposm3.zip -FileName imposm3-$($env:APPVEYOR_REPO_BRANCH)-$((Get-Date).ToUniversalTime().ToString("yyyyMMdd"))-$(($env:APPVEYOR_REPO_COMMIT).Substring(0, 7))-win-x86-64.zip
