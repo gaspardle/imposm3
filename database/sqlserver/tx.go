@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/gaspardle/go-mssqlclrgeo"
+	"strings"
 	"sync"
 )
 
@@ -72,13 +73,19 @@ func (tt *bulkTableTx) Insert(row []interface{}) error {
 	for idx, col := range tt.Spec.Columns {
 
 		//geometryType
-		if col.Type.Name() == "GEOMETRY" {
+		if col.FieldType.Name == "geometry" || col.FieldType.Name == "validated_geometry" {
 			wkb, _ := hex.DecodeString(row[idx].(string))
 			udt, err := mssqlclrgeo.WkbToUdtGeo(wkb, false)
 			if err != nil {
 				return err
 			}
 			row[idx] = udt
+		}
+		//XXX hstore to json
+		if col.FieldType.Name == "hstore_tags" {
+			value := row[idx].(string)
+			value = strings.Replace(value, "=>", ":", -1)
+			row[idx] = "{" + value + "}"
 		}
 	}
 
@@ -131,6 +138,7 @@ type syncTableTx struct {
 	Tx         *sql.Tx
 	Table      string
 	Spec       tableSpec
+	Spec2      *TableSpec
 	InsertStmt *sql.Stmt
 	DeleteStmt *sql.Stmt
 	InsertSql  string
@@ -147,6 +155,15 @@ func NewSynchronousTableTx(mssql *Mssql, tableName string, spec tableSpec) Table
 		Pg:    mssql,
 		Table: tableName,
 		Spec:  spec,
+	}
+	return tt
+}
+func NewSynchronousTableTxWithColumns(mssql *Mssql, tableName string, spec *TableSpec) TableTx {
+	tt := &syncTableTx{
+		Pg:    mssql,
+		Table: tableName,
+		Spec:  spec,
+		Spec2: spec,
 	}
 	return tt
 }
@@ -180,6 +197,27 @@ func (tt *syncTableTx) Begin(tx *sql.Tx) error {
 }
 
 func (tt *syncTableTx) Insert(row []interface{}) error {
+
+	if tt.Spec2 != nil {
+		for idx, col := range tt.Spec2.Columns {
+			//geometryType
+			if col.FieldType.Name == "geometry" || col.FieldType.Name == "validated_geometry" {
+				wkb, _ := hex.DecodeString(row[idx].(string))
+				udt, err := mssqlclrgeo.WkbToUdtGeo(wkb, false)
+				if err != nil {
+					return err
+				}
+				row[idx] = udt
+			}
+			//xxx hstore to json
+			if col.FieldType.Name == "hstore_tags" {
+				value := row[idx].(string)
+				value = strings.Replace(value, "=>", ":", -1)
+				row[idx] = "{" + value + "}"
+			}
+
+		}
+	}
 	_, err := tt.InsertStmt.Exec(row...)
 	if err != nil {
 		return &SQLInsertError{SQLError{tt.InsertSql, err}, row}

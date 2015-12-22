@@ -43,6 +43,7 @@ test-unit: imposm3
 	$(GO) test `$(GO) list ./... | grep -v 'imposm3/test'`
 
 test-system: imposm3
+	(cd testmssql && make test)
 	(cd test && make test)
 
 %.pb.go: %.proto

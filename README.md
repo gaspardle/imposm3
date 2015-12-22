@@ -1,3 +1,21 @@
+Imposm 3 for SQL Server
+=======================
+[![Build status](https://ci.appveyor.com/api/projects/status/4pi9hb1isjp3f54d/branch/sqlserver?svg=true)](https://ci.appveyor.com/project/gaspardle/imposm3-a7kj8/branch/sqlserver)
+
+Simple import
+
+    imposm3 import -connection mssql://Server=host\instance;User Id=user;Password=password;Database=database; \
+        -mapping mapping.json -read /path/to/osm.pbf -write
+
+### Other considerations ###
+HStore columns are stored in JSON in a nvarchar(max) column.
+
+Make sure to use functions supported by SQL Server in your mapping.
+Ex. `ST_Area(geometry)` is `geometry.STArea()`
+
+### Tests ###
+Set the database with `SQLHOST`,`SQLINSTANCE`, `SQLDATABASE`, `SQLUSER` and `SQLPASSWORD` environment variables.
+
 Imposm 3
 ========
 

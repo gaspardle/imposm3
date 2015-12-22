@@ -36,13 +36,9 @@ func (t *geometryType) Name() string {
 }
 
 func (t *geometryType) PrepareInsertSql(i int, spec *TableSpec) string {
-	//return fmt.Sprintf("$%d::Geometry",
-	//
 
-	return fmt.Sprintf("geometry::STGeomFromWKB(convert(varbinary(max), $%d, 2), %d)",
-		//return fmt.Sprintf("geometry::STGeomFromWKB($%d, %d)",
-
-		i, spec.Srid,
+	return fmt.Sprintf("cast(convert(varbinary(max), $%d, 2) as geometry)",
+		i,
 	)
 }
 
@@ -78,6 +74,7 @@ func init() {
 		"int32":              &simpleColumnType{"INT"},
 		"int64":              &simpleColumnType{"BIGINT"},
 		"float32":            &simpleColumnType{"REAL"},
+		"hstore_string":      &simpleColumnType{"NVARCHAR(max)"},
 		"geometry":           &geometryType{"GEOMETRY"},
 		"validated_geometry": &validatedGeometryType{geometryType{"GEOMETRY"}},
 	}

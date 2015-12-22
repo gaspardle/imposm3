@@ -31,7 +31,7 @@ func newTxRouter(mssql *Mssql, bulkImport bool) (*TxRouter, error) {
 		}
 		txr.tx = tx
 		for tableName, table := range mssql.Tables {
-			tt := NewSynchronousTableTx(mssql, table.FullName, table)
+			tt := NewSynchronousTableTxWithColumns(mssql, table.FullName, table)
 			err := tt.Begin(tx)
 			if err != nil {
 				return nil, err

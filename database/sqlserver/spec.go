@@ -204,7 +204,7 @@ func (spec *GeneralizedTableSpec) InsertSQL() string {
 	}
 
 	columnSQL := strings.Join(cols, ",\n")
-	sql := fmt.Sprintf(`INSERT INTO "%s"."%s" (SELECT %s FROM "%s"."%s"%s)`,
+	sql := fmt.Sprintf(`INSERT INTO "%s"."%s" SELECT %s FROM "%s"."%s"%s`,
 		spec.Schema, spec.FullName, columnSQL, spec.Source.Schema,
 		spec.Source.FullName, where)
 	return sql

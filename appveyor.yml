@@ -19,15 +19,16 @@ environment:
 services:
   - postgresql94
   - mssql2014
+cache:
+  - c:\projects\leveldb
+  #- c:\projects\leveldb -> appveyor.yml
 
 # Scripts that run after cloning repository
 install:
-  - mkdir c:\projects
+  - if not exist c:\projects  mkdir c:\projects
   - mkdir c:\projects\deps\include c:\projects\deps\lib c:\projects\deps\bin
-  - set PATH=%GOROOT%\bin;%PATH%
-  - set PATH=%GOPATH%\bin;%PATH%
-  - set PATH=c:\projects\deps\bin;c:\projects\osmosis\bin;C:\Program Files\PostgreSQL\9.4\bin;C:\msys64\mingw64\bin;C:\msys64\usr\bin;%PATH%
-  #- set GOPATH=%GOPATH%\src\%PROJ%\Godeps\_workspace;%GOPATH%
+  - set PATH=%GOPATH%\bin;%GOROOT%\bin;%PATH%
+  - set PATH=c:\projects\deps\bin;c:\projects\osmosis\bin;C:\msys64\mingw64\bin;C:\msys64\usr\bin;%PATH%;C:\Program Files\PostgreSQL\9.4\bin
   - C:\msys64\usr\bin\bash -lc "pacman --needed --noconfirm -Sy pacman-mirrors"
   - C:\msys64\usr\bin\bash -lc "pacman --noconfirm -Sy"
   - C:\msys64\usr\bin\bash -lc "pacman --noconfirm --needed -S autoconf perl automake libtool make mingw-w64-x86_64-geos protobuf" 
@@ -41,32 +42,14 @@ install:
   # geos
   - C:\msys64\usr\bin\bash -lc "geos-config --version"
   # osmosis
-  - ps: (New-Object Net.WebClient).DownloadFile('http://bretth.dev.openstreetmap.org/osmosis-build/osmosis-latest.zip', 'C:\projects\osmosis-latest.zip')
-  - 7z x -y C:\projects\osmosis-latest.zip -oC:\projects\osmosis > nul
+  - ps: (New-Object Net.WebClient).DownloadFile('http://bretth.dev.openstreetmap.org/osmosis-build/osmosis-0.44.1.zip', 'C:\projects\osmosis.zip')
+  - 7z x -y C:\projects\osmosis.zip -oC:\projects\osmosis > nul
   # protoc
   - ps: (New-Object Net.WebClient).DownloadFile('https://github.com/google/protobuf/releases/download/v2.6.1/protoc-2.6.1-win32.zip', 'C:\projects\protoc.zip')
   - 7z x -y C:\projects\protoc.zip -oC:\projects\deps\bin > nul
   # LevelDB
-  - git clone https://github.com/zalanyib/leveldb-mingw.git c:\projects\leveldb  
-
-  #python dependencies 
-  #- git clone https://github.com/Alexpux/MINGW-packages c:\msys64\repos
-  #- C:\msys64\usr\bin\bash -lc "cd /c/msys64/repos/mingw-w64-python-pip; PATH=$PATH:/mingw64/bin; exec 0</dev/null; ln -s /mingw64/bin/libgeos_c.dll /mingw64/bin/geos.dll; makepkg-mingw -s --noconfirm --noprogressbar --skippgpcheck --pkg mingw-w64-x86_64-python2-pip; pacman --noprogressbar --noconfirm -U mingw-w64-x86_64-python2-pip*.pkg.tar.xz; pip install nose shapely psycopg2"
-  #- ln -s /mingw64/bin/libgeos_c.dll /mingw64/bin/geos.dll
-  #- copy C:\msys64\mingw64\bin\libgeos_c.dll C:\msys64\mingw64\bin\geos.dll
-  #- cd c:\msys64\repos\mingw-w64-python-pip
-  #- makepkg-mingw -sL --noconfirm --noprogressbar --skippgpcheck --pkg mingw-w64-x86_64-python2-pip
-  #- pacman --noconfirm -U mingw-w64-python-pip*.pkg.tar.xz
-  #- SET PATH=C:\python27-x64;;%PATH%
-  - ps: Start-FileDownload "http://download.osgeo.org/osgeo4w/osgeo4w-setup-x86_64.exe"
-  - osgeo4w-setup-x86_64.exe --root C:\projects\osgeo4w --packages "geos,python-shapely,python-core,psycopg2" -N -d -n -a -q --site "http://download.osgeo.org/osgeo4w/"
-  - SET PATH=C:\projects\osgeo4w\apps\Python27\Scripts;C:\projects\osgeo4w\bin;%PATH%
-  - SET PYTHONHOME=C:\projects\osgeo4w\apps\Python27
-  - python --version
-  - ps: Start-FileDownload https://bootstrap.pypa.io/get-pip.py
-  - python get-pip.py
-  - pip --version
-  - pip install nose python-tds
+  - if not exist c:\projects\leveldb (git clone https://github.com/zalanyib/leveldb-mingw.git c:\projects\leveldb )
+  #- git clone https://github.com/zalanyib/leveldb-mingw.git c:\projects\leveldb  
 
 # To run your custom scripts instead of automatic MSBuild
 build_script:
@@ -90,69 +73,58 @@ before_test:
   - SET PGUSER=postgres
   - SET PGPASSWORD=Password12!
   - createuser --no-superuser --no-createrole --createdb osm
-  - createdb -E UTF8 -O osm osm
-  - psql -d osm -c "CREATE EXTENSION postgis;"
-  - psql -d osm -c "CREATE EXTENSION hstore;" # only required for hstore support
-  - echo ALTER USER osm WITH PASSWORD 'osm'; |psql -d osm
+  - createdb -E UTF8 -O osm imposm3test
+  - psql -d imposm3test -c "CREATE EXTENSION postgis;"
+  - psql -d imposm3test -c "CREATE EXTENSION hstore;" # only required for hstore support
+  - echo ALTER USER osm WITH PASSWORD 'osm'; |psql -d postgres
   - SET PGUSER=osm
   - SET PGPASSWORD=osm
-  - SET PGDATABASE=osm
-  # setup mssql
-  - ps: >-
-      # Source: http://geekswithblogs.net/TedStatham/archive/2014/06/13/setting-the-ports-for-a-named-sql-server-instance-using.aspx
-      # Set the $instanceName value below to the name of the instance you
-      # want to configure a static port for. This could conceivably be
-      # passed into the script as a parameter.
-
-      [reflection.assembly]::LoadWithPartialName("Microsoft.SqlServer.Smo") | Out-Null
-      [reflection.assembly]::LoadWithPartialName("Microsoft.SqlServer.SqlWmiManagement") | Out-Null
-
+  - SET PGDATABASE=imposm3test
+  # setup SQL Server 
+  - ps: |
+      [reflection.assembly]::LoadWithPartialName('Microsoft.SqlServer.Smo') | Out-Null
+      [reflection.assembly]::LoadWithPartialName('Microsoft.SqlServer.SqlWmiManagement') | Out-Null
       $instanceName = 'SQL2014'
       $computerName = $env:COMPUTERNAME
       $smo = 'Microsoft.SqlServer.Management.Smo.'
-      $wmi = New-Object ($smo + 'Wmi.ManagedComputer')
-
-      # For the named instance, on the current computer, for the TCP protocol,
-      # loop through all the IPs and configure them to use the standard port
-      # of 1433.
-
+      $wmi = New-Object ($smo + 'Wmi.ManagedComputer')  
       $uri = "ManagedComputer[@Name='$computerName']/ServerInstance[@Name='$instanceName']/ServerProtocol[@Name='Tcp']"
       $Tcp = $wmi.GetSmoObject($uri)
-
+      $Tcp.IsEnabled = $true
       foreach ($ipAddress in $Tcp.IPAddresses)
       {
           $ipAddress.IPAddressProperties["TcpDynamicPorts"].Value = ""
           $ipAddress.IPAddressProperties["TcpPort"].Value = "1433"
       }
-
       $Tcp.Alter()
-
       # Restart the named instance of SQL Server to enable the changes.
       Restart-Service "MSSQL`$$instanceName"
+      Restart-Service "SQLBrowser"
 
-  #- $sqlInstance = "(local)\SQL2014"
-  - sqlcmd -S "localhost" -Q "Use [master]; CREATE DATABASE osm; CREATE LOGIN [osm] WITH PASSWORD=N'osm', DEFAULT_DATABASE=[master], CHECK_EXPIRATION=OFF, CHECK_POLICY=OFF; CREATE USER [osm] FOR LOGIN [osm]; ALTER ROLE [db_datareader] ADD MEMBER [osm]; ALTER ROLE [db_datawriter] ADD MEMBER [osm];
-
-  # XXX copy dlls in imposm path
+  - sqlcmd -S "(local)\SQL2014" -Q "Use [master]; CREATE DATABASE imposm3test;"
+  - sqlcmd -S "(local)\SQL2014" -Q "Use [imposm3test]; CREATE LOGIN [osm] WITH PASSWORD=N'osm', DEFAULT_DATABASE=[imposm3test], CHECK_EXPIRATION=OFF, CHECK_POLICY=OFF; CREATE USER [osm] FOR LOGIN [osm]; ALTER ROLE [db_owner] ADD MEMBER [osm];"
+  - SET SQLHOST=localhost
+  - SET SQLINSTANCE=SQL2014
+  - SET SQLUSER=osm
+  - SET SQLPASSWORD=osm
+  - SET SQLDATABASE=imposm3test
+  # copy dlls in imposm path
   - copy C:\projects\deps\bin\leveldb.dll C:\gopath\src\github.com\omniscale\imposm3
   - copy C:\msys64\mingw64\bin\libgeos.dll C:\gopath\src\github.com\omniscale\imposm3
   - copy C:\msys64\mingw64\bin\libgeos_c.dll C:\gopath\src\github.com\omniscale\imposm3
   - copy "C:\msys64\mingw64\bin\libstdc++-6.dll" C:\gopath\src\github.com\omniscale\imposm3
   - copy C:\msys64\mingw64\bin\libwinpthread-1.dll C:\gopath\src\github.com\omniscale\imposm3
   - copy C:\msys64\mingw64\bin\libgcc_s_seh-1.dll C:\gopath\src\github.com\omniscale\imposm3
+  - set PATH=C:\gopath\src\github.com\omniscale\imposm3;%GOROOT%\bin;%PATH%
 
 # To run your custom scripts instead of automatic tests
 test_script:
   # Unit tests
-  #- ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
   - ps: Add-AppveyorTest "Unit Tests" -Outcome Running
-  - C:\msys64\usr\bin\bash -lc "cd /c/gopath/src/github.com/omniscale/imposm3; PATH=$PATH:/mingw64/bin; exec 0</dev/null; make test-unit"
-  #- make test-unit 
+  - make test-unit
   - ps: Update-AppveyorTest "Unit Tests" -Outcome Passed
   # System tests 
   - ps: Add-AppveyorTest "System tests" -Outcome Running 
-  #- C:\msys64\usr\bin\bash -lc "cd /c/gopath/src/github.com/omniscale/imposm3; PATH=$PATH:/mingw64/bin; exec 0</dev/null; make test-system" 
-  #- SET PATH=C:\msys64\usr\bin;%PATH%
   - make test-system 
   - ps: Update-AppveyorTest "System tests" -Outcome Passed
 
