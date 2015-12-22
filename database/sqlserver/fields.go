@@ -59,6 +59,10 @@ type validatedGeometryType struct {
 
 func (t *validatedGeometryType) GeneralizeSql(colSpec *ColumnSpec, spec *GeneralizedTableSpec) string {
 	//return fmt.Sprintf(`ST_Buffer(ST_SimplifyPreserveTopology("%s", %f), 0) as "%s"`,
+	if spec.Source.GeometryType != "polygon" {
+		// TODO return warning earlier
+		log.Warnf("validated_geometry column returns polygon geometries for %s", spec.FullName)
+	}
 	return fmt.Sprintf(`[%s].Reduce(%f).STBuffer(0) as "%s"`,
 		colSpec.Name, spec.Tolerance, colSpec.Name,
 	)

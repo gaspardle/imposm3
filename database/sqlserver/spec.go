@@ -40,9 +40,20 @@ func (col *ColumnSpec) AsSQL() string {
 }
 
 func (spec *TableSpec) CreateTableSQL() string {
-	cols := []string{
-		"id int NOT NULL IDENTITY (1, 1)",
+	foundIdCol := false
+	for _, cs := range spec.Columns {
+		if cs.Name == "id" {
+			foundIdCol = true
+		}
 	}
+
+	cols := []string{}
+	if !foundIdCol {
+		// only add id column if there is no id configured
+		// TODO allow to disable id column?
+		cols = append(cols, "id int NOT NULL IDENTITY (1, 1)")
+	}
+
 	for _, col := range spec.Columns {
 		if col.Type.Name() == "GEOMETRY" {
 			continue

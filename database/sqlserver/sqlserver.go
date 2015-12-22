@@ -3,15 +3,16 @@ package sqlserver
 import (
 	"database/sql"
 	"fmt"
+	"runtime"
+	"strings"
+	"sync/atomic"
+
 	_ "github.com/gaspardle/go-mssqldb"
 	"github.com/omniscale/imposm3/database"
 	"github.com/omniscale/imposm3/element"
 	"github.com/omniscale/imposm3/geom"
 	"github.com/omniscale/imposm3/logging"
 	"github.com/omniscale/imposm3/mapping"
-	"runtime"
-	"strings"
-	"sync/atomic"
 )
 
 var log = logging.NewLogger("SqlServer")
@@ -182,7 +183,7 @@ func (mssql *Mssql) Init() error {
 func (mssql *Mssql) Finish() error {
 	defer log.StopStep(log.StartStep(fmt.Sprintf("Creating geometry indices")))
 
-	worker := int(runtime.NumCPU() / 2)
+	worker := int(runtime.GOMAXPROCS(0))
 	if worker < 1 {
 		worker = 1
 	}
@@ -267,7 +268,7 @@ func (mssql *Mssql) GeneralizeUpdates() error {
 func (mssql *Mssql) Generalize() error {
 	defer log.StopStep(log.StartStep(fmt.Sprintf("Creating generalized tables")))
 
-	worker := int(runtime.NumCPU() / 2)
+	worker := int(runtime.GOMAXPROCS(0))
 	if worker < 1 {
 		worker = 1
 	}
@@ -378,7 +379,7 @@ func (mssql *Mssql) generalizeTable(table *GeneralizedTableSpec) error {
 func (mssql *Mssql) Optimize() error {
 	defer log.StopStep(log.StartStep(fmt.Sprintf("Clustering on geometry")))
 
-	worker := int(runtime.NumCPU() / 2)
+	worker := int(runtime.GOMAXPROCS(0))
 	if worker < 1 {
 		worker = 1
 	}

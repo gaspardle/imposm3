@@ -3,6 +3,7 @@ package sqlserver
 import (
 	"database/sql"
 	"fmt"
+	_ "log"
 	"strings"
 	"sync"
 )
