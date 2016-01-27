@@ -226,8 +226,8 @@ func createIndex(mssql *Mssql, tableName string, columns []ColumnSpec) error {
 
 	for _, col := range columns {
 		if col.FieldType.Name == "id" {
-			sql := fmt.Sprintf(`CREATE INDEX "%s_osm_id_idx" ON [%s].[%s](%s) ON [PRIMARY]`,
-				tableName, mssql.Config.ImportSchema, tableName, col.Name)
+			sql := fmt.Sprintf(`CREATE INDEX "%s_%s_idx" ON [%s].[%s](%s) ON [PRIMARY]`,
+				tableName, col.Name, mssql.Config.ImportSchema, tableName, col.Name)
 			step := log.StartStep(fmt.Sprintf("Creating OSM id index on %s", tableName))
 			_, err := mssql.Db.Exec(sql)
 			log.StopStep(step)
