@@ -1,20 +1,30 @@
 Imposm 3 for SQL Server
 =======================
-[![Build status](https://ci.appveyor.com/api/projects/status/4pi9hb1isjp3f54d/branch/sqlserver?svg=true)](https://ci.appveyor.com/project/gaspardle/imposm3-a7kj8/branch/sqlserver)
+[![Build status](https://ci.appveyor.com/api/projects/status/fesj0xxehhuk4wne/branch/sqlserver?svg=true)](https://ci.appveyor.com/project/gaspardle/imposm3/branch/sqlserver)
 
-Simple import
+Import OpenStreetMap data into a SQL Server 2012/2014/2016 database.
+
+Uses the go-mssqldb driver. Check https://github.com/denisenkom/go-mssqldb for the list of accepted connection parameters.
+
+Support almost all features, such as: Custom schemas, diff, bulk import.
+
+### Usage ###
 
     imposm3 import -connection mssql://Server=host\instance;User Id=user;Password=password;Database=database; \
         -mapping mapping.json -read /path/to/osm.pbf -write
 
 ### Other considerations ###
-HStore columns are stored in JSON in a nvarchar(max) column.
+Hstore columns are stored in JSON in `nvarchar(max)` column.
+
+Geometries are stored in a `geometry` column.
 
 Make sure to use functions supported by SQL Server in your mapping.
 Ex. `ST_Area(geometry)` is `geometry.STArea()`
 
+You can still import into a PostGIS database with `postgis://`.
+
 ### Tests ###
-Set the database with `SQLHOST`,`SQLINSTANCE`, `SQLDATABASE`, `SQLUSER` and `SQLPASSWORD` environment variables.
+Refer to the [Test](#test) section below. Set the database with `SQLHOST`,`SQLINSTANCE`, `SQLDATABASE`, `SQLUSER` and `SQLPASSWORD` environment variables.
 
 Imposm 3
 ========
