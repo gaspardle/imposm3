@@ -44,7 +44,7 @@ func (t *geometryType) PrepareInsertSql(i int, spec *TableSpec) string {
 
 func (t *geometryType) GeneralizeSql(colSpec *ColumnSpec, spec *GeneralizedTableSpec) string {
 	//return fmt.Sprintf(`ST_SimplifyPreserveTopology("%s", %f) as "%s"`,
-	return fmt.Sprintf(`[%s].MakeValid().Reduce(%f) as "%s"`,
+	return fmt.Sprintf(`[%s].Reduce(%f) as "%s"`,
 		colSpec.Name, spec.Tolerance, colSpec.Name,
 	)
 }
