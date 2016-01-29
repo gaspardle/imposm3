@@ -1,5 +1,9 @@
 package mssqlclrgeo
 
+import (
+	"fmt"
+)
+
 type Builder struct {
 	g           Geometry
 	Srid        uint32
@@ -57,7 +61,7 @@ func (b *Builder) AddFigure(figureType FIGURE) {
 	b.g.Figures = append(b.g.Figures, *figure)
 }
 
-func (b *Builder) EndFigure() {
+func (b *Builder) EndFigure() error {
 	if b.isGeography && true {
 		points_fig := b.g.Points[b.g.Figures[len(b.g.Figures)-1].Offset:]
 		if isClockwise(points_fig) {
@@ -67,8 +71,17 @@ func (b *Builder) EndFigure() {
 				points_fig[i], points_fig[opp] = points_fig[opp], points_fig[i]
 			}
 		}
-		//TODO check for self intersection
+	}	
+
+	//validation: a ring must have at least 4 points
+	nbPoints := len(b.g.Points) - int(b.g.Figures[len(b.g.Figures)-1].Offset)
+		
+	if b.g.Shapes[len(b.g.Shapes)-1].OpenGisType == SHAPE_POLYGON && nbPoints < 4 {
+		return fmt.Errorf("udtgeo_builder: ring has %d point(s)", nbPoints)
 	}
+	// TODO check for self intersection
+	// TODO First point == last point
+	return nil
 }
 func (b *Builder) AddPoint(x float64, y float64, z float64, m float64) {
 	point := &Point{X: x, Y: y, Z: z, M: m}

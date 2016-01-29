@@ -2,7 +2,6 @@ package mssqlclrgeo
 
 import (
 	"bytes"
-
 	"fmt"
 )
 
@@ -148,7 +147,10 @@ func buildType(geom interface{}, b *Builder) (err error) {
 			for _, point := range ring.points {
 				b.AddPoint(point.X, point.Y, point.Z, point.M)
 			}
-			b.EndFigure()
+			err := b.EndFigure()
+			if err != nil{
+				return err
+			}
 		}
 		b.CloseShape()
 
