@@ -410,37 +410,8 @@ func (mssql *Mssql) Optimize() error {
 }
 
 func clusterTable(mssql *Mssql, tableName string, srid int, columns []ColumnSpec) error {
-	for _, col := range columns {
-		if col.Type.Name() == "GEOMETRY" {
-			step := log.StartStep(fmt.Sprintf("Indexing %s on geohash", tableName))
-			sql := fmt.Sprintf(`CREATE INDEX "%s_geom_geohash" ON "%s"."%s" (ST_GeoHash(ST_Transform(ST_SetSRID(Box2D(%s), %d), 4326)))`,
-				tableName, mssql.Config.ImportSchema, tableName, col.Name, srid)
-			_, err := mssql.Db.Exec(sql)
-			log.StopStep(step)
-			if err != nil {
-				return err
-			}
-
-			step = log.StartStep(fmt.Sprintf("Clustering %s on geohash", tableName))
-			sql = fmt.Sprintf(`CLUSTER "%s_geom_geohash" ON "%s"."%s"`,
-				tableName, mssql.Config.ImportSchema, tableName)
-			_, err = mssql.Db.Exec(sql)
-			log.StopStep(step)
-			if err != nil {
-				return err
-			}
-			break
-		}
-	}
-
-	step := log.StartStep(fmt.Sprintf("Analysing %s", tableName))
-	sql := fmt.Sprintf(`ANALYSE "%s"."%s"`,
-		mssql.Config.ImportSchema, tableName)
-	_, err := mssql.Db.Exec(sql)
-	log.StopStep(step)
-	if err != nil {
-		return err
-	}
+	log.Print("mssql: clusterTable is not implemented")
+	//sql := fmt.Sprintf(`UPDATE STATISTICS [%s].[%s]`, mssql.Config.ImportSchema, sourceTable)
 
 	return nil
 }

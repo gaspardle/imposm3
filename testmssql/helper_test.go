@@ -75,7 +75,7 @@ func (s *importTestSuite) importOsm(t *testing.T) {
 		"-deployproduction=false",
 		"-removebackup=false",
 	}
-	log.Print(importArgs)
+
 	config.ParseImport(importArgs)
 	import_.Import()
 }
@@ -248,7 +248,7 @@ func (s *importTestSuite) query(t *testing.T, table string, id int64, keys []str
 		} else {
 			t.Fatal(err)
 		}
-	}	
+	}
 	
 	r.name = string(col_name)
 	r.osmType = string(col_osmtype)
@@ -258,22 +258,12 @@ func (s *importTestSuite) query(t *testing.T, table string, id int64, keys []str
 	r.tags = make(map[string]string)
 	if !r.missing {
 		tags_map := make(map[string]string)
-		e := json.Unmarshal(col_json, &tags_map)
-		if e != nil {
-			panic(e)
+		err := json.Unmarshal(col_json, &tags_map)
+		if err != nil {
+			t.Fatal(err)
 		}
 		r.tags = tags_map
 	}
-
-	//hstore
-	/*if len(h.Map) > 0 {
-		r.tags = make(map[string]string)
-	}
-	for k, v := range h.Map {
-		if v.Valid {
-			r.tags[k] = v.String
-		}
-	}*/
 	return r
 }
 
@@ -295,21 +285,12 @@ func (s *importTestSuite) queryTags(t *testing.T, table string, id int64) record
 	r.tags = make(map[string]string)
 	if !r.missing {
 		tags_map := make(map[string]string)
-		e := json.Unmarshal(col_json, &tags_map)
-		if e != nil {
-			panic(e)
+		err := json.Unmarshal(col_json, &tags_map)
+		if err != nil {
+			t.Fatal(err)
 		}
 		r.tags = tags_map
 	}
-	/*
-		if len(h.Map) > 0 {
-			r.tags = make(map[string]string)
-		}
-		for k, v := range h.Map {
-			if v.Valid {
-				r.tags[k] = v.String
-			}
-		}*/
 	return r
 }
 
@@ -321,7 +302,7 @@ func (s *importTestSuite) queryRows(t *testing.T, table string, id int64) []reco
 	rs := []record{}
 	for rows.Next() {
 		var r record
-		if err := rows.Scan(&r.id, &r.name, &r.osmType, &r.wkt); err != nil {
+		if err = rows.Scan(&r.id, &r.name, &r.osmType, &r.wkt); err != nil {
 			t.Fatal(err)
 		}
 		rs = append(rs, r)
@@ -338,26 +319,18 @@ func (s *importTestSuite) queryRowsTags(t *testing.T, table string, id int64) []
 	for rows.Next() {
 		var r record
 		var col_json []byte
-		if err := rows.Scan(&r.id, &r.wkt, &col_json); err != nil {
+		if err = rows.Scan(&r.id, &r.wkt, &col_json); err != nil {
 			t.Fatal(err)
 		}
 
 		r.tags = make(map[string]string)
 		tags_map := make(map[string]string)
-		e := json.Unmarshal(col_json, &tags_map)
-		if e != nil {
-			panic(e)
+		err = json.Unmarshal(col_json, &tags_map)
+		if err != nil {
+			t.Fatal(err)
 		}
 		r.tags = tags_map
 
-		/*if len(h.Map) > 0 {
-			r.tags = make(map[string]string)
-		}
-		for k, v := range h.Map {
-			if v.Valid {
-				r.tags[k] = v.String
-			}
-		}*/
 		rs = append(rs, r)
 	}
 	return rs
