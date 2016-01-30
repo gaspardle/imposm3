@@ -14,14 +14,18 @@ Support almost all features, such as: Custom schemas, diff, bulk import.
         -mapping mapping.json -read /path/to/osm.pbf -write
 
 ### Other considerations ###
-Hstore columns are stored in JSON in `nvarchar(max)` column.
+* Hstore columns are stored in JSON in `nvarchar(max)` column.
 
-Geometries are stored in a `geometry` column.
+* Geometries are stored in a `geometry` column.
 
-Make sure to use functions supported by SQL Server in your mapping.
+* Make sure to use functions supported by SQL Server in your mapping.
 Ex. `ST_Area(geometry)` is `geometry.STArea()`
 
-You can still import into a PostGIS database with `postgis://`.
+* You can still import into a PostGIS database with `postgis://`.
+
+* If you get this error : 
+`Could not allocate a new page for database 'osm_database' because of insufficient disk space in filegroup 'PRIMARY'. Create the necessary space by dropping objects in the filegroup, adding additional files to the filegroup, or setting autogrowth on for existing files in the filegroup.`
+Are you using SQL Server Express? It has a maximum database size of 10GB...
 
 ### Tests ###
 Refer to the [Test](#test) section below. Set the database with `SQLHOST`,`SQLINSTANCE`, `SQLDATABASE`, `SQLUSER` and `SQLPASSWORD` environment variables.

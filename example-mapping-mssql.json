@@ -32,12 +32,12 @@
         },
         "landusages_gen1": {
             "source": "landusages",
-            "sql_filter": "ST_Area(geometry)>50000.000000",
+            "sql_filter": "geometry.STArea()>50000.000000",
             "tolerance": 50.0
         },
         "landusages_gen0": {
             "source": "landusages_gen1",
-            "sql_filter": "ST_Area(geometry)>500000.000000",
+            "sql_filter": "geometry.STArea()>500000.000000",
             "tolerance": 200.0
         }
     },
