@@ -77,7 +77,12 @@ func (tt *bulkTableTx) Insert(row []interface{}) error {
 			wkb, _ := hex.DecodeString(row[idx].(string))
 			udt, err := mssqlclrgeo.WkbToUdtGeo(wkb, false)
 			if err != nil {
-				return err
+				//null instead of an invalid geometry or the insert will fail
+				log.Print(err)
+				udt = nil
+			}
+			if len(udt) == 0 {
+				udt = nil
 			}
 			row[idx] = udt
 		}
@@ -205,7 +210,12 @@ func (tt *syncTableTx) Insert(row []interface{}) error {
 				wkb, _ := hex.DecodeString(row[idx].(string))
 				udt, err := mssqlclrgeo.WkbToUdtGeo(wkb, false)
 				if err != nil {
-					return err
+					//null instead of an invalid geometry or the insert will fail
+					log.Print(err)
+					udt = nil
+				}
+				if len(udt) == 0 {
+					udt = nil
 				}
 				row[idx] = udt
 			}
