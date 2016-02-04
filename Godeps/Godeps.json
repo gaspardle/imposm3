@@ -8,7 +8,7 @@
 		},
 		{
 			"ImportPath": "github.com/gaspardle/go-mssqldb",
-			"Rev": "c6dce495acdf188d8c59734ee0ee75dd507bc28a"
+			"Rev": "bdf48094f208ac201977c34dc1430ea7f94aec4e"
 		},
 		{
 			"ImportPath": "github.com/golang/protobuf/proto",

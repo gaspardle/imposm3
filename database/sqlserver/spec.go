@@ -100,8 +100,12 @@ func (spec *TableSpec) CopySQL() string {
 	for _, col := range spec.Columns {
 		cols = append(cols, col.Name)
 	}
-
-	return mssqldb.CopyIn(spec.Schema+"."+spec.FullName, cols...)
+	
+	options:= mssqldb.MssqlBulkOptions{}
+	//TABLOCK to minimize logging
+	options.Tablock = true	
+	return mssqldb.CopyIn(spec.Schema + "." + spec.FullName, options, cols...)
+	
 }
 
 func (spec *TableSpec) DeleteSQL() string {
