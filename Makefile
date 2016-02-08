@@ -47,6 +47,7 @@ test-system: imposm3
 	(cd test && make test)
 
 system-test-files:
+	(cd testmssql && make files)    
 	(cd test && make files)
 
 %.pb.go: %.proto

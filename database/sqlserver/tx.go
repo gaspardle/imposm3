@@ -3,10 +3,12 @@ package sqlserver
 import (
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
-	"github.com/gaspardle/go-mssqlclrgeo"
-	"strings"
 	"sync"
+
+	"github.com/gaspardle/go-mssqlclrgeo"
+	"github.com/lib/pq/hstore"
 )
 
 type TableTx interface {
@@ -85,15 +87,23 @@ func (tt *bulkTableTx) Insert(row []interface{}) error {
 				udt = nil
 			}
 			row[idx] = udt
-		}
-		//XXX hstore to json
-		if col.FieldType.Name == "hstore_tags" {
-			value := row[idx].(string)
-			value = strings.Replace(value, "=>", ":", -1)
-			row[idx] = "{" + value + "}"
+		}else if col.FieldType.Name == "hstore_tags" {
+			//XXX hstore to json
+			value := []uint8(row[idx].(string))
+			h := hstore.Hstore{}
+			h.Scan(value)
+			
+			//convert nullstring to string
+			map_string := make(map[string]string)
+			for key, value := range h.Map {
+				map_string[key] = value.String
+			}
+			
+			val_json, _ := json.Marshal(map_string)
+			row[idx] = string(val_json)			
 		}
 	}
-
+		
 	tt.rows <- row
 	return nil
 }
@@ -218,12 +228,20 @@ func (tt *syncTableTx) Insert(row []interface{}) error {
 					udt = nil
 				}
 				row[idx] = udt
-			}
-			//xxx hstore to json
-			if col.FieldType.Name == "hstore_tags" {
-				value := row[idx].(string)
-				value = strings.Replace(value, "=>", ":", -1)
-				row[idx] = "{" + value + "}"
+			}else if col.FieldType.Name == "hstore_tags" {
+				//XXX hstore to json
+				value := []uint8(row[idx].(string))
+				h := hstore.Hstore{}
+				h.Scan(value)
+				
+				//convert nullstring to string
+				map_string := make(map[string]string)
+				for key, value := range h.Map {
+					map_string[key] = value.String
+				}
+				
+				val_json, _ := json.Marshal(map_string)
+				row[idx] = string(val_json)			
 			}
 
 		}

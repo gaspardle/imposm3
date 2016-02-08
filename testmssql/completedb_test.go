@@ -1,7 +1,6 @@
 package test
 
 import (
-	"log"
 	"database/sql"
 	"fmt"
 
@@ -27,7 +26,7 @@ func TestPrepare(t *testing.T) {
 		mappingFileName: "complete_db_mapping_mssql.json",
 	}
 	ts.g = geos.NewGeos()
-log.Print(getTestConnectionString())
+
 	var err error
 	ts.db, err = sql.Open("mssql", "mssql://" + getTestConnectionString())
 	if err != nil {
@@ -296,6 +295,12 @@ func TestDuplicateIds(t *testing.T) {
 		{"osm_buildings", 51011, "way", nil},
 		{"osm_buildings", -51011, "mp", nil},
 	})
+}
+
+func TestRelationUpdatedByNode(t *testing.T) {
+	// Relations was updated after modified node.
+
+	assertArea(t, checkElem{"osm_buildings", -52121, "yes", nil}, 13653930440.868315)
 }
 
 func TestGeneralizedBananaPolygonIsValid(t *testing.T) {
@@ -604,6 +609,12 @@ func TestDuplicateIds2(t *testing.T) {
 		{"osm_buildings", 51011, Missing, nil},
 		{"osm_buildings", -51011, "mp", nil},
 	})
+}
+
+func TestRelationUpdatedByNode2(t *testing.T) {
+	// Relations was updated after modified node.
+
+	assertArea(t, checkElem{"osm_buildings", -52121, "yes", nil}, 16276875196.653734)
 }
 
 func TestUpdatedWay2(t *testing.T) {

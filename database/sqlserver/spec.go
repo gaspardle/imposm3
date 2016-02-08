@@ -129,11 +129,19 @@ func (spec *TableSpec) DeleteSQL() string {
 }
 
 func NewTableSpec(mssql *Mssql, t *mapping.Table) *TableSpec {
+    var geomType string
+	switch t.Type {
+	case mapping.RelationMemberTable:
+		geomType = "geometry"
+	default:
+		geomType = string(t.Type)
+	}
+
 	spec := TableSpec{
 		Name:         t.Name,
 		FullName:     mssql.Prefix + t.Name,
 		Schema:       mssql.Config.ImportSchema,
-		GeometryType: string(t.Type),
+		GeometryType: geomType,
 		Srid:         mssql.Config.Srid,
 	}
 	for _, field := range t.Fields {
