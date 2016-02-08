@@ -45,7 +45,7 @@ install:
   - ps: (New-Object Net.WebClient).DownloadFile('http://bretth.dev.openstreetmap.org/osmosis-build/osmosis-0.44.1.zip', 'C:\projects\osmosis.zip')
   - 7z x -y C:\projects\osmosis.zip -oC:\projects\osmosis > nul
   # protoc
-  - ps: (New-Object Net.WebClient).DownloadFile('https://github.com/google/protobuf/releases/download/v2.6.1/protoc-2.6.1-win32.zip', 'C:\projects\protoc.zip')
+  - ps: (New-Object Net.WebClient).DownloadFile('https://github.com/google/protobuf/releases/download/v3.0.0-beta-2/protoc-3.0.0-beta-2-win32.zip', 'C:\projects\protoc.zip')
   - 7z x -y C:\projects\protoc.zip -oC:\projects\deps\bin > nul
   # LevelDB
   - if not exist c:\projects\leveldb (git clone https://github.com/zalanyib/leveldb-mingw.git c:\projects\leveldb )
