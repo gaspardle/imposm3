@@ -3,6 +3,16 @@
 	"ignore": "test",
 	"package": [
 		{
+			"path": "github.com/gaspardle/go-mssqlclrgeo",
+			"revision": "97ceabf987a40577fd51d3e71806e257f9dc4940",
+			"revisionTime": "2016-01-29T09:33:14-05:00"
+		},
+		{
+			"path": "github.com/gaspardle/go-mssqldb",
+			"revision": "bdf48094f208ac201977c34dc1430ea7f94aec4e",
+			"revisionTime": "2016-02-04T12:40:29-05:00"
+		},
+		{
 			"path": "github.com/golang/protobuf/proto",
 			"revision": "39e27fc0f226450c58e11eda145b542bc5dff3fe",
 			"revisionTime": "2015-05-15T11:32:44+10:00"
