@@ -25,7 +25,7 @@ build/%.osc.gz: %.osc
 files: $(PBF_FILES) $(OSCGZ_FILES)
 
 test: files
-	(cd .. && godep go test ./testmssql $(TESTOPTS))
+	(cd .. && go test ./testmssql $(TESTOPTS))
 
 route_relation: files
-	(cd .. && godep go test -test.run TestRouteRelation_ ./testmssql $(TESTOPTS))
+	(cd .. && go test -test.run TestRouteRelation_ ./testmssql $(TESTOPTS))
