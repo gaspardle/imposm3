@@ -14,8 +14,8 @@ import (
 
 	"github.com/omniscale/imposm3/cache"
 
-	"github.com/omniscale/imposm3/diff"
 	"github.com/omniscale/imposm3/geom/geos"
+	"github.com/omniscale/imposm3/update"
 
 	"github.com/omniscale/imposm3/config"
 	"github.com/omniscale/imposm3/import_"
@@ -33,6 +33,7 @@ type importConfig struct {
 	mappingFileName string
 	cacheDir        string
 	verbose         bool
+	expireTileDir   string
 }
 
 type importTestSuite struct {
@@ -44,15 +45,15 @@ type importTestSuite struct {
 
 const Missing = ""
 
-func getTestConnectionString() string{
+func getTestConnectionString() string {
 	addr := os.Getenv("SQLHOST")
 	instance := os.Getenv("SQLINSTANCE")
 	user := os.Getenv("SQLUSER")
 	password := os.Getenv("SQLPASSWORD")
-	database := os.Getenv("SQLDATABASE")	
-	
-	if(len(strings.TrimSpace(instance)) > 0){
-		instance = "\\"+ instance
+	database := os.Getenv("SQLDATABASE")
+
+	if len(strings.TrimSpace(instance)) > 0 {
+		instance = "\\" + instance
 	}
 	return fmt.Sprintf(
 		"Server=%s%s;User Id=%s;Password=%s;Database=%s;",
@@ -167,10 +168,13 @@ func (s *importTestSuite) updateOsm(t *testing.T, diffFile string) {
 		"-limitto", "clipping.geojson",
 		"-dbschema-production", dbschemaProduction,
 		"-mapping", s.config.mappingFileName,
-		diffFile,
 	}
+	if s.config.expireTileDir != "" {
+		args = append(args, "-expiretiles-dir", s.config.expireTileDir)
+	}
+	args = append(args, diffFile)
 	config.ParseDiffImport(args)
-	diff.Diff()
+	update.Diff()
 }
 
 func (s *importTestSuite) dropSchemas() {
@@ -211,16 +215,6 @@ type record struct {
 	tags    map[string]string
 }
 
-func (s *importTestSuite) queryExists(t *testing.T, table string, id int64) bool {
-	row := s.db.QueryRow(fmt.Sprintf(`SELECT CAST(COUNT(*) AS BIT) FROM "%s"."%s" WHERE osm_id=$1`, dbschemaProduction, table), id)
-	var exists bool
-	if err := row.Scan(&exists); err != nil {
-		t.Error(err)
-		return false
-	}
-	return exists
-}
-
 func (s *importTestSuite) query(t *testing.T, table string, id int64, keys []string) record {
 	kv := make([]string, len(keys))
 
@@ -233,7 +227,7 @@ func (s *importTestSuite) query(t *testing.T, table string, id int64, keys []str
 	} else {
 		columns = "'{" + columns + "}'"
 	}
-	
+
 	//columns = "(select " + strings.Join(kv, ", ") + " for json path)"
 	stmt := fmt.Sprintf(`SELECT osm_id, name, type, geometry.STAsText(), %s as json FROM "%s"."%s" WHERE osm_id=$1`, columns, dbschemaProduction, table)
 
@@ -249,7 +243,7 @@ func (s *importTestSuite) query(t *testing.T, table string, id int64, keys []str
 			t.Fatal(err)
 		}
 	}
-	
+
 	r.name = string(col_name)
 	r.osmType = string(col_osmtype)
 	r.wkt = string(col_wkt)
@@ -351,42 +345,42 @@ func (s *importTestSuite) queryGeom(t *testing.T, table string, id int64) *geos.
 	defer g.Finish()
 	geom := g.FromWkt(r.wkt)
 	if geom == nil {
-		t.Fatalf("unable to read WKT for %s", id)
+		t.Fatalf("unable to read WKT for %d", id)
 	}
 	return geom
 }
 
 func (s *importTestSuite) queryDynamic(t *testing.T, table, where string) []map[string]string {
 
-    //XXX
-    keys :=map[string]string{
-        "wkt": "geometry.STAsText()",
-        "name": "name",
-        "role": "role",
-    }
-    kv := make([]string, len(keys))
-    
-    i := 0
+	//XXX
+	keys := map[string]string{
+		"wkt":  "geometry.STAsText()",
+		"name": "name",
+		"role": "role",
+	}
+	kv := make([]string, len(keys))
+
+	i := 0
 	for key, value := range keys {
 		kv[i] = "\"" + key + "\": \"' + cast(coalesce(" + value + ", '') as nvarchar(max)) + '\""
-        i = i+1
+		i = i + 1
 	}
 	columns := strings.Join(kv, ", ")
 	columns = "'{" + columns + "}'"
-	
-    stmt := fmt.Sprintf(`SELECT %s FROM "%s"."%s" WHERE %s`, columns, dbschemaProduction, table, where)
+
+	stmt := fmt.Sprintf(`SELECT %s FROM "%s"."%s" WHERE %s`, columns, dbschemaProduction, table, where)
 	rows, err := s.db.Query(stmt)
 	if err != nil {
 		t.Fatal(err)
 	}
 	results := []map[string]string{}
 	for rows.Next() {
-        var col_json []byte
+		var col_json []byte
 		if err := rows.Scan(&col_json); err != nil {
 			t.Fatal(err)
 		}
-        
-        r := make(map[string]string)
+
+		r := make(map[string]string)
 		err = json.Unmarshal(col_json, &r)
 		if err != nil {
 			t.Fatal(err)
@@ -394,7 +388,7 @@ func (s *importTestSuite) queryDynamic(t *testing.T, table, where string) []map[
 
 		results = append(results, r)
 	}
-	return results   
+	return results
 
 }
 
@@ -403,14 +397,6 @@ type checkElem struct {
 	id      int64
 	osmType string
 	tags    map[string]string
-}
-
-func assertRecordsMissing(t *testing.T, elems []checkElem) {
-	for _, e := range elems {
-		if ts.queryExists(t, e.table, e.id) {
-			t.Errorf("found %d in %d", e.id, e.table)
-		}
-	}
 }
 
 func assertRecords(t *testing.T, elems []checkElem) {
@@ -457,14 +443,14 @@ func assertHstore(t *testing.T, elems []checkElem) {
 	}
 }
 
-func assertValid(t *testing.T, e checkElem) {
+func assertGeomValid(t *testing.T, e checkElem) {
 	geom := ts.queryGeom(t, e.table, e.id)
 	if !ts.g.IsValid(geom) {
 		t.Fatalf("geometry of %d is invalid", e.id)
 	}
 }
 
-func assertArea(t *testing.T, e checkElem, expect float64) {
+func assertGeomArea(t *testing.T, e checkElem, expect float64) {
 	geom := ts.queryGeom(t, e.table, e.id)
 	if !ts.g.IsValid(geom) {
 		t.Fatalf("geometry of %d is invalid", e.id)
@@ -475,7 +461,7 @@ func assertArea(t *testing.T, e checkElem, expect float64) {
 	}
 }
 
-func assertLength(t *testing.T, e checkElem, expect float64) {
+func assertGeomLength(t *testing.T, e checkElem, expect float64) {
 	geom := ts.queryGeom(t, e.table, e.id)
 	if !ts.g.IsValid(geom) {
 		t.Fatalf("geometry of %d is invalid", e.id)
