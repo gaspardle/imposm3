@@ -18,6 +18,10 @@ type SerializableBulkConfig struct {
 	Options     MssqlBulkOptions
 }
 
+func (d *MssqlDriver) OpenConnection(dsn string) (*MssqlConn, error) {
+	return d.open(dsn)
+}
+
 func (c *MssqlConn) prepareCopyIn(query string) (_ driver.Stmt, err error) {
 
 	config_json := query[11:]

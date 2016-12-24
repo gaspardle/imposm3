@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strings"
 	"time"
+	"golang.org/x/net/context" // use the "x/net/context" for backwards compatibility.
 )
 
 type MssqlBulk struct {
@@ -207,7 +208,7 @@ func (b *MssqlBulk) makeRowData(row []interface{}) ([]byte, error) {
 
 func (b *MssqlBulk) Done() (rowcount int64, err error) {
 	if b.headerSent == false {
-		//no rows had been sent	
+		//no rows had been sent
 		return 0, nil
 	}
 	var buf = b.cn.sess.buf
@@ -226,7 +227,7 @@ func (b *MssqlBulk) Done() (rowcount int64, err error) {
 
 	//
 	tokchan := make(chan tokenStruct, 5)
-	go processResponse(b.cn.sess, tokchan)
+	go processResponse(context.Background(), b.cn.sess, tokchan)
 
 	var rowCount int64
 	for token := range tokchan {
@@ -313,7 +314,7 @@ func (s *MssqlStmt) QueryMeta() (cols []columnStruct, err error) {
 		return
 	}
 	tokchan := make(chan tokenStruct, 5)
-	go processResponse(s.c.sess, tokchan)
+	go processResponse(context.Background(), s.c.sess, tokchan)
 	// process metadata
 	//var cols []string
 loop:
