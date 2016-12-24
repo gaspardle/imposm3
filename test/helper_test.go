@@ -14,8 +14,8 @@ import (
 
 	"github.com/lib/pq/hstore"
 
-	"github.com/omniscale/imposm3/diff"
 	"github.com/omniscale/imposm3/geom/geos"
+	"github.com/omniscale/imposm3/update"
 
 	"github.com/omniscale/imposm3/config"
 	"github.com/omniscale/imposm3/import_"
@@ -33,6 +33,7 @@ type importConfig struct {
 	mappingFileName string
 	cacheDir        string
 	verbose         bool
+	expireTileDir   string
 }
 
 type importTestSuite struct {
@@ -152,10 +153,13 @@ func (s *importTestSuite) updateOsm(t *testing.T, diffFile string) {
 		"-limitto", "clipping.geojson",
 		"-dbschema-production", dbschemaProduction,
 		"-mapping", s.config.mappingFileName,
-		diffFile,
 	}
+	if s.config.expireTileDir != "" {
+		args = append(args, "-expiretiles-dir", s.config.expireTileDir)
+	}
+	args = append(args, diffFile)
 	config.ParseDiffImport(args)
-	diff.Diff()
+	update.Diff()
 }
 
 func (s *importTestSuite) dropSchemas() {

@@ -364,9 +364,43 @@ func TestComplete_EnumerateKey(t *testing.T) {
 	})
 }
 
+func TestComplete_AreaMapping(t *testing.T) {
+	// Mapping type dependent area-defaults.
+
+	assertRecords(t, []checkElem{
+		// highway=pedestrian
+		{"osm_roads", 301151, "pedestrian", nil},
+		{"osm_landusages", 301151, Missing, nil},
+
+		// // highway=pedestrian, area=yes
+		{"osm_roads", 301152, Missing, nil},
+		{"osm_landusages", 301152, "pedestrian", nil},
+
+		// // leisure=track
+		{"osm_roads", 301153, Missing, nil},
+		{"osm_landusages", 301153, "track", nil},
+
+		// // leisure=track, area=no
+		{"osm_roads", 301154, "track", nil},
+		{"osm_landusages", 301154, Missing, nil},
+	})
+}
+
+func TestComplete_HstoreTags(t *testing.T) {
+	// Mapping type dependent area-defaults.
+
+	assertHstore(t, []checkElem{
+		{"osm_buildings", 401151, "*", map[string]string{"amenity": "fuel", "opening_hours": "24/7"}},
+	})
+}
+
+// #######################################################################
+
 func TestComplete_Update(t *testing.T) {
 	ts.updateOsm(t, "./build/complete_db.osc.gz")
 }
+
+// #######################################################################
 
 func TestComplete_NoDuplicates(t *testing.T) {
 	// Relations/ways are only inserted once Checks #66

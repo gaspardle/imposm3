@@ -34,8 +34,7 @@ Imposm 3
 ========
 
 Imposm is an importer for OpenStreetMap data. It reads PBF files and
-imports the data into PostgreSQL/PostGIS. It can also update the
-DB from diff files.
+imports the data into PostgreSQL/PostGIS. It can also automatically update the database with the latest changes from OSM.
 
 It is designed to create databases that are optimized for rendering (i.e. generating tiles or for WMS services).
 
@@ -80,7 +79,10 @@ Features
   Limit imported geometries to polygons from GeoJSON, for city/state/country imports.
 
 - Easy deployment:
-  Single binary with only runtime dependencies to common libs (GEOS, ProtoBuf and LevelDB)
+  Single binary with only runtime dependencies to common libs (GEOS, ProtoBuf and LevelDB).
+
+- Automatic OSM updates:
+  Includes background service (imposm3 run) that automatically downloads and imports the latest OSM changes.
 
 - Route relations:
   Import all relation types including routes.
@@ -121,9 +123,7 @@ Imposm 3 is used in production but there is no official 3.0 release yet.
 
 There are a few features we like to see in Imposm 3:
 
-* Automatic download and import of differential files
 * Support for other projections than EPSG:3857 or EPSG:4326
-* Improved integration with tile servers (expiration of updated tiles)
 * Custom field/filter functions
 * Official releases with binaries for more platforms
 
@@ -167,7 +167,7 @@ Imposm3 uses the following Go libraries.
 - <https://github.com/lib/pq>
 - <https://gopkg.in/yaml.v2>
 
-These libraries are already vendorized (i.e. the source code is included in the Imposm repository).
+These libraries are already vendorized (i.e. the source code is included in the Imposm repository) and there is no need to install them separately.
 
 #### Compile
 
@@ -255,8 +255,7 @@ License
 
 Imposm 3 is released as open source under the Apache License 2.0. See LICENSE.
 
-All dependencies included as source code are released under a BSD-ish license except the YAML package.
-The YAML package is released as LGPL3 with an exception that permits static linking. See LICENSE.deps.
+All dependencies included as source code are released under a BSD-ish license. See LICENSE.dep.
 
 All dependencies included in binary releases are released under a BSD-ish license except the GEOS package.
 The GEOS package is released as LGPL3 and is linked dynamically. See LICENSE.bin.

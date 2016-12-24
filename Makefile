@@ -7,26 +7,19 @@ GOFILES=$(shell find . \( -name \*.go ! -name version.go \) )
 # for protoc-gen-go
 export PATH := $(GOPATH)/bin:$(PATH)
 
-GOLDFLAGS=-ldflags '-r $${ORIGIN}/lib'
+GOLDFLAGS=-ldflags '-r $${ORIGIN}/lib $(VERSION_LDFLAGS)'
 
 GO:=$(if $(shell go version |grep 'go1.5'),GO15VENDOREXPERIMENT=1,) go
 
 BUILD_DATE=$(shell date +%Y%m%d)
 BUILD_REV=$(shell git rev-parse --short HEAD)
 BUILD_VERSION=dev-$(BUILD_DATE)-$(BUILD_REV)
+VERSION_LDFLAGS=-X github.com/omniscale/imposm3.buildVersion=$(BUILD_VERSION)
 
 all: build test
 
-update_version:
-	@perl -p -i -e 's/buildVersion = ".*"/buildVersion = "$(BUILD_VERSION)"/' cmd/version.go
-
-revert_version:
-	@perl -p -i -e 's/buildVersion = ".*"/buildVersion = ""/' cmd/version.go
-
 imposm3: $(PBGOFILES) $(GOFILES)
-	$(MAKE) update_version
-	$(GO) build $(GOLDFLAGS)
-	$(MAKE) revert_version
+	$(GO) build $(GOLDFLAGS) ./cmd/imposm3
 
 build: imposm3
 
@@ -56,7 +49,7 @@ system-test-files:
 docs:
 	(cd docs && make html)
 
-REMOTE_DOC_LOCATION = omniscale.de:domains/imposm.org/docs/imposm3
+REMOTE_DOC_LOCATION = omniscale.de:/opt/www/imposm.org/docs/imposm3
 DOC_VERSION = 3.0.0
 
 upload-docs: docs
@@ -71,3 +64,25 @@ build-license-deps:
 		| fold -s -w 80 \
 		>> LICENSE.deps \
 	' _ {} \;
+
+
+
+comma:= ,
+empty:=
+space:= $(empty) $(empty)
+COVER_IGNORE:='/vendor|/cmd'
+COVER_PACKAGES:= $(shell $(GO) list ./... | grep -Ev $(COVER_IGNORE))
+COVER_PACKAGES_LIST:=$(subst $(space),$(comma),$(COVER_PACKAGES))
+
+test-coverage:
+	mkdir -p .coverprofile
+	rm -f .coverprofile/*
+	$(GO) list -f '{{if gt (len .TestGoFiles) 0}}"$(GO) test -covermode count -coverprofile ./.coverprofile/{{.Name}}-$$$$.coverprofile -coverpkg $(COVER_PACKAGES_LIST) {{.ImportPath}}"{{end}}' ./... \
+		| grep -Ev $(COVER_IGNORE) \
+		| xargs -n 1 bash -c
+	$(GOPATH)/bin/gocovmerge .coverprofile/*.coverprofile > overalls.coverprofile
+	rm -rf .coverprofile
+
+test-coverage-html: test-coverage
+	$(GO) tool cover -html overalls.coverprofile
+
